@@ -8,6 +8,9 @@ const userAuthSelect = `
     u.hash_contrasena,
     u.activo,
     u.cambio_contrasena_obligatorio,
+    u.intentos_fallidos,
+    u.bloqueado_hasta,
+    COALESCE(u.bloqueado_hasta > CURRENT_TIMESTAMP, false) AS bloqueada,
     COALESCE(array_agg(DISTINCT r.nombre) FILTER (WHERE r.nombre IS NOT NULL), '{}') AS roles,
     COALESCE(array_agg(DISTINCT p.codigo) FILTER (WHERE p.codigo IS NOT NULL), '{}') AS permisos
   FROM electronica_az.usuario u
@@ -114,3 +117,36 @@ export const createClientAccount = (data, passwordHash) => withTransaction(async
   );
   return user;
 });
+
+
+
+
+
+export const registerFailedLogin = async (idUsuario, maxAttempts, lockSeconds) => {
+  const updated = (await query(
+    `UPDATE electronica_az.usuario
+     SET intentos_fallidos = CASE WHEN intentos_fallidos + 1 >= $2 THEN 0 ELSE intentos_fallidos + 1 END,
+         bloqueado_hasta = CASE
+           WHEN intentos_fallidos + 1 >= $2 THEN CURRENT_TIMESTAMP + make_interval(secs => $3)
+           ELSE bloqueado_hasta
+         END
+     WHERE id_usuario = $1
+       AND (bloqueado_hasta IS NULL OR bloqueado_hasta <= CURRENT_TIMESTAMP)
+     RETURNING (intentos_fallidos = 0) AS bloqueada, bloqueado_hasta`,
+    [idUsuario, maxAttempts, lockSeconds],
+  )).rows[0];
+  if (updated) return { bloqueada: updated.bloqueada, bloqueadoHasta: updated.bloqueado_hasta };
+
+  const current = (await query(
+    'SELECT bloqueado_hasta FROM electronica_az.usuario WHERE id_usuario = $1',
+    [idUsuario],
+  )).rows[0];
+  return { bloqueada: true, bloqueadoHasta: current?.bloqueado_hasta ?? null };
+};
+
+export const clearLoginFailures = (idUsuario) => query(
+  `UPDATE electronica_az.usuario
+   SET intentos_fallidos = 0, bloqueado_hasta = NULL
+   WHERE id_usuario = $1 AND (intentos_fallidos <> 0 OR bloqueado_hasta IS NOT NULL)`,
+  [idUsuario],
+);

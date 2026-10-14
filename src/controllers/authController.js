@@ -16,7 +16,7 @@ export const registerAuthController = async (req, res) => {
 
 export const loginAuthController = async (req, res) => {
   try {
-    return res.status(200).json({ data: await loginAuthService(req.validated.body) });
+    return res.status(200).json({ data: await loginAuthService(req.validated.body, req.ip) });
   } catch (error) {
     return sendError(res, error);
   }
@@ -28,7 +28,7 @@ export const getMeAuthController = (req, res) => (
 
 export const logoutAuthController = async (req, res) => {
   try {
-    await logoutAuthService(req.auth.token);
+    await logoutAuthService(req.auth.token, req.auth.usuario, req.ip);
     return res.status(200).json({ data: { loggedOut: true } });
   } catch (error) {
     return sendError(res, error);
@@ -38,7 +38,7 @@ export const logoutAuthController = async (req, res) => {
 export const changePasswordAuthController = async (req, res) => {
   try {
     return res.status(200).json({
-      data: await changePasswordAuthService(req.auth, req.validated.body),
+      data: await changePasswordAuthService(req.auth, req.validated.body, req.ip),
     });
   } catch (error) {
     return sendError(res, error);

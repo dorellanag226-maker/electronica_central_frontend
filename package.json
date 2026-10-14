@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "node --env-file=.env  index.js",
-    "start": "node --env-file=.env index.js",
+    "start": "node index.js",
     "lint": "eslint .",
     "test": "node --env-file=.env ./node_modules/vitest/vitest.mjs run",
     "build": "node --check index.js && node --check src/app.js",
@@ -20,6 +20,7 @@
     "bootstrap:security": "node --env-file=.env scripts/bootstrapSecurity.js"
   },
   "dependencies": {
+    "cors": "^2.8.6",
     "exceljs": "^4.4.0",
     "express": "^5.1.0",
     "pdfkit": "^0.20.2",

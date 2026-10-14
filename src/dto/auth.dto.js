@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const password = z.string().min(12).max(128);
+const password = z.string().min(8).max(128);
 
 export const registerAuthDto = z.object({
   nombreUsuario: z.string().trim().min(3).max(120),

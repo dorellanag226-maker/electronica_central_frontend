@@ -4,7 +4,7 @@
 -- Generado automáticamente. No editar a mano: regenerar con:
 --   cd backend && npm run db:bundle
 --
--- Origen: backend/scripts/migrations/001_schema_reference.sql … 010_reports_permissions.sql
+-- Origen: backend/scripts/migrations/001_schema_reference.sql … 012_admin_panel.sql
 --
 -- Uso (BD vacía / nueva):
 --   1. CREATE DATABASE … (si aplica; en Supabase no crear DB)
@@ -797,6 +797,61 @@ CROSS JOIN electronica_az.permiso p
 WHERE r.nombre IN ('ADMINISTRADOR', 'DESARROLLADOR')
   AND p.codigo = 'REPORTES_CONSULTAR'
 ON CONFLICT DO NOTHING;
+
+COMMIT;
+
+-- #############################################################################
+-- >>> 011_login_lockout.sql
+-- #############################################################################
+
+-- Bloqueo de cuenta: 3 intentos fallidos => bloqueo de 3 minutos (la logica esta en authService.js).
+BEGIN;
+
+ALTER TABLE electronica_az.usuario
+  ADD COLUMN IF NOT EXISTS intentos_fallidos integer NOT NULL DEFAULT 0
+    CONSTRAINT ck_usuario_intentos_fallidos CHECK (intentos_fallidos >= 0),
+  ADD COLUMN IF NOT EXISTS bloqueado_hasta timestamptz;
+
+COMMIT;
+
+-- #############################################################################
+-- >>> 012_admin_panel.sql
+-- #############################################################################
+
+-- Soporte del panel de administracion (frontend): nombre y fecha de alta de usuarios,
+-- jerarquia/estado de categorias y estado de unidades de medida.
+BEGIN;
+
+ALTER TABLE electronica_az.usuario
+  ADD COLUMN IF NOT EXISTS nombre varchar(120),
+  ADD COLUMN IF NOT EXISTS creado_en timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+UPDATE electronica_az.usuario SET nombre = nombre_usuario WHERE nombre IS NULL;
+
+ALTER TABLE electronica_az.categoria
+  ADD COLUMN IF NOT EXISTS id_categoria_padre uuid,
+  ADD COLUMN IF NOT EXISTS activo boolean NOT NULL DEFAULT true;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'fk_categoria_padre'
+  ) THEN
+    ALTER TABLE electronica_az.categoria
+      ADD CONSTRAINT fk_categoria_padre FOREIGN KEY (id_categoria_padre)
+        REFERENCES electronica_az.categoria (id_categoria)
+        ON UPDATE RESTRICT ON DELETE RESTRICT;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'ck_categoria_no_propia_padre'
+  ) THEN
+    ALTER TABLE electronica_az.categoria
+      ADD CONSTRAINT ck_categoria_no_propia_padre CHECK (id_categoria_padre IS NULL OR id_categoria_padre <> id_categoria);
+  END IF;
+END $$;
+
+ALTER TABLE electronica_az.unidad_medida
+  ADD COLUMN IF NOT EXISTS activo boolean NOT NULL DEFAULT true;
 
 COMMIT;
 

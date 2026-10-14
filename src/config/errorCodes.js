@@ -9,6 +9,7 @@ export const errorCodes = {
   BUSINESS_RULE: 'UE001',
   INTERNAL_ERROR: 'SE001',
   SERVICE_UNAVAILABLE: 'SU001',
+  ACCOUNT_LOCKED: 'AU004',
 };
 
 export const errorCatalog = {
@@ -16,6 +17,7 @@ export const errorCatalog = {
   [errorCodes.INVALID_CREDENTIALS]: { statusHttp: 401, message: 'Invalid credentials or session' },
   [errorCodes.SESSION_EXPIRED]: { statusHttp: 401, message: 'Session expired' },
   [errorCodes.MISSING_TOKEN]: { statusHttp: 401, message: 'Authentication required' },
+  [errorCodes.ACCOUNT_LOCKED]: { statusHttp: 423, message: 'Account temporarily locked' },
   [errorCodes.ACCESS_DENIED]: { statusHttp: 403, message: 'Access denied' },
   [errorCodes.NOT_FOUND]: { statusHttp: 404, message: 'Resource not found' },
   [errorCodes.CONFLICT]: { statusHttp: 409, message: 'Resource conflict' },
