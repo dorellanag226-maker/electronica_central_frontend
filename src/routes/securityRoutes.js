@@ -28,16 +28,19 @@ import {
   userStateDto,
 } from '../dto/security.dto.js';
 import { authenticate } from '../middlewares/authMiddleware.js';
-import { requirePermissions } from '../middlewares/authorizationMiddleware.js';
+import { requireAnyPermission, requirePermissions } from '../middlewares/authorizationMiddleware.js';
 import { validateBody, validateParams } from '../middlewares/validateDto.js';
 
 const securityRouter = Router();
 securityRouter.use(authenticate);
 
+// Solo administrador: editar usuarios, cambiar estado, roles, restablecer, gestionar roles.
 const manageUsers = requirePermissions('USUARIOS_GESTIONAR');
+// Administrador y empleado: listar y crear usuarios (la pantalla también necesita roles y permisos para cargar).
+const usersAccess = requireAnyPermission('USUARIOS_GESTIONAR', 'USUARIOS_CREAR');
 
-securityRouter.get('/usuarios', manageUsers, listUsersController);
-securityRouter.post('/usuarios', manageUsers, validateBody(createUserDto), createUserController);
+securityRouter.get('/usuarios', usersAccess, listUsersController);
+securityRouter.post('/usuarios', usersAccess, validateBody(createUserDto), createUserController);
 securityRouter.patch(
   '/usuarios/:id',
   manageUsers,
@@ -73,7 +76,7 @@ securityRouter.post(
   resetUserController,
 );
 
-securityRouter.get('/roles', manageUsers, listRolesController);
+securityRouter.get('/roles', usersAccess, listRolesController);
 securityRouter.post('/roles', manageUsers, validateBody(roleDto), createRoleController);
 securityRouter.patch(
   '/roles/:id',
@@ -82,7 +85,7 @@ securityRouter.patch(
   validateBody(roleDto),
   updateRoleController,
 );
-securityRouter.get('/permisos', manageUsers, listPermissionsController);
+securityRouter.get('/permisos', usersAccess, listPermissionsController);
 
 securityRouter.get('/clientes', requirePermissions('CLIENTES_GESTIONAR'), listClientsController);
 securityRouter.post(

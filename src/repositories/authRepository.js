@@ -36,12 +36,14 @@ export const findUserById = async (idUsuario) => (
   `, [idUsuario])
 ).rows[0];
 
-export const createSession = async (tokenHash, expiresAt, userId) => (
+// La expiracion se calcula con el reloj de la BD (no con el de Node) para que todas las
+// comparaciones de tiempo de la sesion usen una sola fuente de verdad.
+export const createSession = async (tokenHash, ttlSeconds, userId) => (
   await query(
     `INSERT INTO electronica_az.sesion_usuario(token_hash, expira_en, id_usuario)
-     VALUES ($1, $2, $3)
+     VALUES ($1, CURRENT_TIMESTAMP + make_interval(secs => $2), $3)
      RETURNING id_sesion, expira_en`,
-    [tokenHash, expiresAt, userId],
+    [tokenHash, ttlSeconds, userId],
   )
 ).rows[0];
 
@@ -51,6 +53,8 @@ export const findSession = async (tokenHash) => (
       s.id_sesion,
       s.expira_en,
       s.ultima_actividad_en,
+      (s.expira_en <= CURRENT_TIMESTAMP) AS expirada,
+      (EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - s.ultima_actividad_en)) * 1000)::float8 AS inactividad_ms,
       u.id_usuario,
       u.nombre_usuario,
       u.correo,

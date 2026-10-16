@@ -18,6 +18,8 @@ const permissions = [
   'VENTAS_GESTIONAR',
   'SOLICITUDES_GESTIONAR',
   'REPORTES_CONSULTAR',
+  'CATALOGO_CONSULTAR',
+  'USUARIOS_CREAR',
 ];
 const addUser = async (client, username, email, password, role) => {
   const hash = await hashPassword(password);
@@ -35,6 +37,8 @@ try {
     await client.query("INSERT INTO electronica_az.rol_permiso(id_rol,id_permiso) SELECT r.id_rol,p.id_permiso FROM electronica_az.rol r JOIN electronica_az.permiso p ON p.codigo='INVENTARIO_CONSULTAR' WHERE r.nombre='VENDEDOR' ON CONFLICT DO NOTHING");
     await client.query("INSERT INTO electronica_az.rol_permiso(id_rol,id_permiso) SELECT r.id_rol,p.id_permiso FROM electronica_az.rol r JOIN electronica_az.permiso p ON p.codigo='VENTAS_GESTIONAR' WHERE r.nombre='VENDEDOR' ON CONFLICT DO NOTHING");
     await client.query("INSERT INTO electronica_az.rol_permiso(id_rol,id_permiso) SELECT r.id_rol,p.id_permiso FROM electronica_az.rol r JOIN electronica_az.permiso p ON p.codigo='SOLICITUDES_GESTIONAR' WHERE r.nombre='VENDEDOR' ON CONFLICT DO NOTHING");
+    // NUEVO: el empleado (VENDEDOR) puede consultar el catálogo y crear usuarios.
+    await client.query("INSERT INTO electronica_az.rol_permiso(id_rol,id_permiso) SELECT r.id_rol,p.id_permiso FROM electronica_az.rol r JOIN electronica_az.permiso p ON p.codigo IN ('CATALOGO_CONSULTAR','USUARIOS_CREAR') WHERE r.nombre='VENDEDOR' ON CONFLICT DO NOTHING");
     await addUser(client, process.env.BOOTSTRAP_ADMIN_USERNAME, process.env.BOOTSTRAP_ADMIN_EMAIL, process.env.BOOTSTRAP_ADMIN_PASSWORD, 'ADMINISTRADOR');
     await addUser(client, process.env.BOOTSTRAP_DEVELOPER_USERNAME, process.env.BOOTSTRAP_DEVELOPER_EMAIL, process.env.BOOTSTRAP_DEVELOPER_PASSWORD, 'DESARROLLADOR');
   });

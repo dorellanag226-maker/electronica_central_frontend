@@ -11,6 +11,9 @@ const catalog = {
   VENTAS_GESTIONAR: { nombre: 'Gestionar ventas', modulo: 'Ventas' },
   SOLICITUDES_GESTIONAR: { nombre: 'Gestionar solicitudes', modulo: 'Solicitudes' },
   REPORTES_CONSULTAR: { nombre: 'Consultar reportes', modulo: 'Reportes' },
+  CATALOGO_CONSULTAR: { nombre: 'Consultar producto, categorias y unidades', modulo: 'Catalogo'},
+  USUARIOS_CREAR: { nombre: 'Crear usuarios', modulo: 'Usuarios y Roles'},
+
 };
 
 export const describePermission = (codigo, descripcion) => (

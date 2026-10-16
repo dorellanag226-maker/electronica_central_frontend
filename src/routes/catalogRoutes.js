@@ -38,18 +38,21 @@ import {
   updateUnitDto,
 } from '../dto/catalog.dto.js';
 import { authenticate } from '../middlewares/authMiddleware.js';
-import { requirePermissions } from '../middlewares/authorizationMiddleware.js';
+import { requireAnyPermission, requirePermissions } from '../middlewares/authorizationMiddleware.js';
 import { validateBody, validateParams, validateQuery } from '../middlewares/validateDto.js';
 
 const catalogRouter = Router();
+// Solo administrador: crear, editar, activar/desactivar.
 const manageCatalog = [authenticate, requirePermissions('CATALOGO_GESTIONAR')];
+// Administrador y empleado (vendedor): solo lectura / búsqueda.
+const consultCatalog = [authenticate, requireAnyPermission('CATALOGO_CONSULTAR', 'CATALOGO_GESTIONAR')];
 
 catalogRouter.get('/catalogo/productos', validateQuery(publicProductsQueryDto), getPublicProductsController);
 catalogRouter.get('/catalogo/productos/:id', validateParams(productIdParamsDto), getPublicProductByIdController);
 catalogRouter.get('/catalogo/filtros', getCatalogFiltersController);
 
 // Categorias
-catalogRouter.get('/categorias', ...manageCatalog, listCategoriesController);
+catalogRouter.get('/categorias', ...consultCatalog, listCategoriesController);
 catalogRouter.post('/categorias', ...manageCatalog, validateBody(createCategoryDto), createCategoryController);
 catalogRouter.patch(
   '/categorias/:id',
@@ -74,7 +77,7 @@ catalogRouter.patch(
 );
 
 // Unidades de medida
-catalogRouter.get('/unidades', ...manageCatalog, listUnitsController);
+catalogRouter.get('/unidades', ...consultCatalog, listUnitsController);
 catalogRouter.post('/unidades', ...manageCatalog, validateBody(createUnitDto), createUnitController);
 catalogRouter.patch(
   '/unidades/:id',
@@ -103,7 +106,7 @@ catalogRouter.post('/ubicaciones', ...manageCatalog, validateBody(createLocation
 catalogRouter.post('/modelos', ...manageCatalog, validateBody(createModelDto), createModelController);
 
 // Productos
-catalogRouter.get('/productos', ...manageCatalog, listProductsController);
+catalogRouter.get('/productos', ...consultCatalog, listProductsController);
 catalogRouter.post('/productos', ...manageCatalog, validateBody(createProductDto), createProductController);
 catalogRouter.patch(
   '/productos/:id',

@@ -205,6 +205,14 @@ describe('inventory flow with PostgreSQL', () => {
     expect(entrada.body.data.existencia.stockActual).toBe(10);
     expect(entrada.body.data.existencia.costoPromedio).toBe(4);
 
+    const bitacoraEntrada = await request(app).get('/api/bitacora').set(authorize);
+    expect(bitacoraEntrada.status).toBe(200);
+    const logEntrada = bitacoraEntrada.body.data.find(
+      (row) => row.accion === 'INVENTARIO_AJUSTE' && row.objeto_afectado.includes(codigo),
+    );
+    expect(logEntrada).toBeTruthy();
+    expect(logEntrada.resultado).toBe('OK');
+
     const bajoMinimoPatch = await request(app)
       .patch(`/api/inventario/${productId}`)
       .set(authorize)
@@ -244,6 +252,12 @@ describe('inventory flow with PostgreSQL', () => {
     expect(entradaIdem.status).toBe(201);
     expect(entradaIdem.body.data.movimiento.idMovimiento).toBe(entrada.body.data.movimiento.idMovimiento);
 
+    const bitacoraIdem = await request(app).get('/api/bitacora').set(authorize);
+    const logsAjusteEntrada = bitacoraIdem.body.data.filter(
+      (row) => row.accion === 'INVENTARIO_AJUSTE' && row.objeto_afectado.includes(codigo) && row.objeto_afectado.includes('ENTRADA'),
+    );
+    expect(logsAjusteEntrada.length).toBe(1);
+
     const conflict = await request(app).post('/api/inventario/ajustes').set(authorize).send({
       idProducto: productId,
       tipo: 'ENTRADA',
@@ -280,6 +294,23 @@ describe('inventory flow with PostgreSQL', () => {
     });
     expect(insufficient.status).toBe(422);
     expect(insufficient.body.error.code).toBe('UE001');
+
+    const isolated = await createCatalogProduct(adminToken, `fail-${suffix}`);
+    const insufficientIsolated = await request(app).post('/api/inventario/ajustes').set(authorize).send({
+      idProducto: isolated.productId,
+      tipo: 'SALIDA',
+      cantidad: 50,
+      motivo: 'Salida sin stock aislado',
+      claveIdempotencia: `ajuste-fail-${suffix}`,
+    });
+    expect(insufficientIsolated.status).toBe(422);
+    expect(insufficientIsolated.body.error.code).toBe('UE001');
+
+    const bitacoraFail = await request(app).get('/api/bitacora').set(authorize);
+    const logIsolated = bitacoraFail.body.data.find(
+      (row) => row.accion === 'INVENTARIO_AJUSTE' && row.objeto_afectado.includes(isolated.codigo),
+    );
+    expect(logIsolated).toBeUndefined();
 
     const stockAfterFail = await query(
       'SELECT stock_actual FROM electronica_az.existencia WHERE id_producto = $1',

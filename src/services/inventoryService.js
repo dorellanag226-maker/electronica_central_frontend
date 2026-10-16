@@ -14,6 +14,7 @@ import {
   saveIdempotencyRecord,
   updateStockMinimo,
 } from '../repositories/inventoryRepository.js';
+import { addLog } from '../repositories/securityRepository.js';
 import { AppError } from '../utils/AppError.js';
 import {
   assertQuantityFraction,
@@ -124,7 +125,7 @@ export const updateStockMinimoService = async (productoId, stockMinimo) => {
   };
 };
 
-export const createInventoryAdjustmentService = async (body, usuario) => {
+export const createInventoryAdjustmentService = async (body, usuario, ip = null) => {
   const payload = {
     idProducto: body.idProducto,
     tipo: body.tipo,
@@ -184,6 +185,9 @@ export const createInventoryAdjustmentService = async (body, usuario) => {
     usuario.id, OPERACION_AJUSTE, body.claveIdempotencia, idem.hash, 201, data,
   );
   if (raced) return raced;
+
+  const objeto = `Producto ${existence.codigo} (${existence.nombre}) - Ajuste ${body.tipo} ${body.cantidad} unid. Motivo: ${body.motivo}`;
+  await addLog(OPERACION_AJUSTE, objeto, 'OK', usuario.id, ip ?? null).catch(() => undefined);
 
   return { cached: false, statusHttp: 201, data };
 };

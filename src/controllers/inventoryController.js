@@ -63,7 +63,11 @@ export const updateStockMinimoController = async (req, res) => {
 
 export const createInventoryAdjustmentController = async (req, res) => {
   try {
-    const result = await createInventoryAdjustmentService(req.validated.body, req.auth.usuario);
+    const result = await createInventoryAdjustmentService(
+      req.validated.body,
+      req.auth.usuario,
+      req.ip,
+    );
     return res.status(result.statusHttp).json({ data: result.data });
   } catch (error) {
     return sendError(res, error);

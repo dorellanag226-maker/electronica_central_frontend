@@ -49,9 +49,7 @@ const isStaff = (roles) => roles.some((role) => (
   ['ADMINISTRADOR', 'VENDEDOR', 'DESARROLLADOR'].includes(role)
 ));
 
-const expiration = (roles) => new Date(
-  Date.now() + (isStaff(roles) ? 8 * 60 * 60 : 7 * 24 * 60 * 60) * 1000,
-);
+const sessionTtlSeconds = (roles) => (isStaff(roles) ? 8 * 60 * 60 : 7 * 24 * 60 * 60);
 
 export const loginAuthService = async ({ identificador, contrasena }, ip) => {
   const user = await findUserForLogin(identificador);
@@ -80,7 +78,7 @@ export const loginAuthService = async ({ identificador, contrasena }, ip) => {
 
   await clearLoginFailures(user.id_usuario);
   const token = createSessionToken();
-  const session = await createSession(hashToken(token), expiration(user.roles), user.id_usuario);
+  const session = await createSession(hashToken(token), sessionTtlSeconds(user.roles), user.id_usuario);
   await logEvent('INICIO_SESION', user.nombre_usuario, 'OK', user.id_usuario, ip);
   return {
     token,
@@ -106,12 +104,10 @@ export const getSessionAuthService = async (token) => {
     throw new AppError(errorCodes.INVALID_CREDENTIALS);
   }
 
-  const now = Date.now();
-  const maxIdle = isStaff(session.roles) ? 30 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
-  if (
-    new Date(session.expira_en).getTime() <= now
-    || now - new Date(session.ultima_actividad_en).getTime() > maxIdle
-  ) {
+  // `expirada` e `inactividad_ms` los calcula la BD con su propio reloj: asi un desfase
+  // entre el reloj de este servidor y el de la BD (p. ej. Railway) no invalida sesiones.
+  const maxIdleMs = isStaff(session.roles) ? 30 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
+  if (session.expirada || session.inactividad_ms > maxIdleMs) {
     throw new AppError(errorCodes.SESSION_EXPIRED);
   }
 

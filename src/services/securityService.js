@@ -123,6 +123,12 @@ export const createUserService = async (data, actor, ip) => {
   }
   assertCanGrant(actor, roles);
 
+  // NUEVO: quien puede crear usuarios pero no gestionarlos (empleado) solo asigna VENDEDOR o CLIENTE.
+  if (!actor.permisos.includes('USUARIOS_GESTIONAR')
+    && roles.some((role) => !['VENDEDOR', 'CLIENTE'].includes(role.nombre))) {
+    throw forbidden('Solo el administrador puede asignar ese rol.');
+  }
+
   if (await emailTaken(data.correo)) {
     throw conflict('Ya existe un usuario con ese correo electrónico.', 'correo');
   }
