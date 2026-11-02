@@ -143,6 +143,50 @@ export const endpoints = [
       },
     },
   },
+  { method: 'get', path: '/api/marcas', operationId: 'listMarcas', summary: 'Listar marcas', tags: ['Catalogo'], auth: 'CATALOGO_CONSULTAR' },
+  {
+    method: 'patch', path: '/api/marcas/{id}', operationId: 'updateMarca', summary: 'Editar marca', tags: ['Catalogo'], auth: 'CATALOGO_GESTIONAR',
+    pathParams: ['id'],
+    body: { type: 'object', required: ['nombre'], properties: { nombre: { type: 'string' } } },
+  },
+  {
+    method: 'get', path: '/api/modelos', operationId: 'listModelos', summary: 'Listar modelos (opcional por marca)', tags: ['Catalogo'], auth: 'CATALOGO_CONSULTAR',
+    query: { idMarca: { type: 'string', format: 'uuid' } },
+  },
+  {
+    method: 'patch', path: '/api/modelos/{id}', operationId: 'updateModelo', summary: 'Editar modelo', tags: ['Catalogo'], auth: 'CATALOGO_GESTIONAR',
+    pathParams: ['id'],
+    body: {
+      type: 'object',
+      properties: {
+        nombre: { type: 'string' },
+        descripcion: { type: 'string' },
+        idMarca: { type: 'string', format: 'uuid' },
+      },
+    },
+  },
+  { method: 'get', path: '/api/ubicaciones', operationId: 'listUbicaciones', summary: 'Listar ubicaciones', tags: ['Catalogo'], auth: 'CATALOGO_CONSULTAR' },
+  {
+    method: 'patch', path: '/api/ubicaciones/{id}', operationId: 'updateUbicacion', summary: 'Editar ubicación', tags: ['Catalogo'], auth: 'CATALOGO_GESTIONAR',
+    pathParams: ['id'],
+    body: {
+      type: 'object',
+      properties: {
+        codigo: { type: 'string' },
+        pasillo: { type: 'string' },
+        estante: { type: 'string' },
+      },
+    },
+  },
+  {
+    method: 'patch', path: '/api/ubicaciones/{id}/productos', operationId: 'assignUbicacionProductos', summary: 'Asignar ubicación a productos', tags: ['Catalogo'], auth: 'CATALOGO_GESTIONAR',
+    pathParams: ['id'],
+    body: {
+      type: 'object',
+      required: ['idProductos'],
+      properties: { idProductos: { type: 'array', items: { type: 'string', format: 'uuid' } } },
+    },
+  },
   {
     method: 'post', path: '/api/productos', operationId: 'createProducto', summary: 'Crear producto', tags: ['Catalogo'], auth: 'CATALOGO_GESTIONAR',
     body: {
@@ -163,9 +207,15 @@ export const endpoints = [
     },
   },
   {
-    method: 'patch', path: '/api/productos/{id}', operationId: 'deactivateProducto', summary: 'Desactivar producto', tags: ['Catalogo'], auth: 'CATALOGO_GESTIONAR',
+    method: 'patch', path: '/api/productos/{id}', operationId: 'deactivateProducto', summary: 'Editar producto (datos, estado o ubicación)', tags: ['Catalogo'], auth: 'CATALOGO_GESTIONAR',
     pathParams: ['id'],
-    body: { type: 'object', required: ['activo'], properties: { activo: { type: 'boolean', enum: [false] } } },
+    body: {
+      type: 'object',
+      properties: {
+        activo: { type: 'boolean', example: false },
+        idUbicacion: { type: 'string', format: 'uuid' },
+      },
+    },
   },
   {
     method: 'post', path: '/api/productos/{id}/compatibilidades', operationId: 'createCompatibilidad', summary: 'Alta compatibilidad', tags: ['Catalogo'], auth: 'CATALOGO_GESTIONAR',

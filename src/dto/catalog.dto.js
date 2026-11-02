@@ -50,16 +50,37 @@ export const updateUnitDto = z.object({
   activo: z.boolean().optional(),
 });
 
+export const updateBrandDto = createBrandDto;
+
 export const createLocationDto = z.object({
   codigo: nameDto,
   pasillo: nameDto,
   estante: nameDto,
 });
 
+const atLeastOneField = (data) => Object.keys(data).length > 0;
+
+export const updateLocationDto = createLocationDto.partial()
+  .refine(atLeastOneField, { message: 'Indique al menos un campo' });
+
+export const assignLocationDto = z.object({
+  idProductos: z.array(uuidDto).min(1).max(500),
+});
+
 export const createModelDto = z.object({
   nombre: nameDto,
   descripcion: optionalDescriptionDto,
   idMarca: uuidDto,
+});
+
+export const updateModelDto = z.object({
+  nombre: nameDto.optional(),
+  descripcion: optionalDescriptionDto,
+  idMarca: uuidDto.optional(),
+}).refine(atLeastOneField, { message: 'Indique al menos un campo' });
+
+export const listModelsQueryDto = z.object({
+  idMarca: uuidDto.optional(),
 });
 
 // El panel de administracion envia `marca` y `modelo` como texto y no indica codigo ni ubicacion:
@@ -89,6 +110,7 @@ export const updateProductDto = z.object({
   idMarca: uuidDto.nullable().optional(),
   marca: optionalTextDto,
   modelo: optionalTextDto,
+  idUbicacion: uuidDto.optional(),
   activo: z.boolean().optional(),
 }).refine((data) => Object.keys(data).length > 0, { message: 'Indique al menos un campo' });
 

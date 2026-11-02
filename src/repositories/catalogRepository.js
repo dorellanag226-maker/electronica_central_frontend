@@ -43,6 +43,21 @@ export const createBrand = (nombre) => query(
   [nombre],
 );
 
+export const listBrands = async () => (
+  await query(`
+    SELECT m.id_marca, m.nombre,
+           (SELECT COUNT(*)::int FROM electronica_az.modelo mo WHERE mo.id_marca = m.id_marca) AS total_modelos,
+           (SELECT COUNT(*)::int FROM electronica_az.producto p WHERE p.id_marca = m.id_marca) AS total_productos
+    FROM electronica_az.marca m
+    ORDER BY m.nombre
+  `)
+).rows;
+
+export const updateBrand = (idMarca, nombre) => query(
+  'UPDATE electronica_az.marca SET nombre = $2 WHERE id_marca = $1 RETURNING *',
+  [idMarca, nombre],
+);
+
 const unitColumns = 'id_unidad_medida, nombre, simbolo, permite_fraccion, activo';
 
 export const listUnits = async () => (
@@ -85,10 +100,86 @@ export const createLocation = (codigo, pasillo, estante) => query(
   [codigo, pasillo, estante],
 );
 
+// Ubicacion que se asigna a los productos creados sin indicar una; la crea el propio sistema.
+export const DEFAULT_LOCATION_CODE = 'SIN-UBICACION';
+
+export const listLocations = async () => (
+  await query(`
+    SELECT u.id_ubicacion, u.codigo, u.pasillo, u.estante,
+           (lower(btrim(u.codigo)) = lower($1)) AS es_predeterminada,
+           (SELECT COUNT(*)::int FROM electronica_az.producto p
+             WHERE p.id_ubicacion = u.id_ubicacion) AS total_productos
+    FROM electronica_az.ubicacion u
+    ORDER BY u.codigo
+  `, [DEFAULT_LOCATION_CODE])
+).rows;
+
+export const locationById = async (idUbicacion) => (
+  await query(
+    `SELECT id_ubicacion, codigo, pasillo, estante,
+            (lower(btrim(codigo)) = lower($2)) AS es_predeterminada
+     FROM electronica_az.ubicacion WHERE id_ubicacion = $1`,
+    [idUbicacion, DEFAULT_LOCATION_CODE],
+  )
+).rows[0];
+
+export const updateLocation = (idUbicacion, codigo, pasillo, estante) => query(
+  `UPDATE electronica_az.ubicacion
+   SET codigo = COALESCE($2, codigo), pasillo = COALESCE($3, pasillo), estante = COALESCE($4, estante)
+   WHERE id_ubicacion = $1 RETURNING *`,
+  [idUbicacion, codigo ?? null, pasillo ?? null, estante ?? null],
+);
+
+// Asigna la ubicacion a varios productos; devuelve los ids que no existen (si hay, no cambia nada).
+export const assignLocationToProducts = (idUbicacion, idProductos) => withTransaction(async (client) => {
+  const found = await client.query(
+    'SELECT id_producto FROM electronica_az.producto WHERE id_producto = ANY($1::uuid[]) FOR UPDATE',
+    [idProductos],
+  );
+  const existing = new Set(found.rows.map((row) => row.id_producto));
+  const missing = idProductos.filter((id) => !existing.has(id));
+  if (missing.length > 0) return { missing, actualizados: 0 };
+
+  const updated = await client.query(
+    'UPDATE electronica_az.producto SET id_ubicacion = $1 WHERE id_producto = ANY($2::uuid[])',
+    [idUbicacion, idProductos],
+  );
+  return { missing: [], actualizados: updated.rowCount };
+});
+
 export const createModel = (nombre, descripcion, idMarca) => query(
   `INSERT INTO electronica_az.modelo(nombre, descripcion, id_marca)
    VALUES($1, $2, $3) RETURNING *`,
   [nombre, descripcion, idMarca],
+);
+
+export const listModels = async (idMarca) => (
+  await query(`
+    SELECT mo.id_modelo, mo.nombre, mo.descripcion, mo.id_marca, m.nombre AS marca,
+           (SELECT COUNT(*)::int FROM electronica_az.producto p WHERE p.id_modelo = mo.id_modelo) AS total_productos,
+           (SELECT COUNT(*)::int FROM electronica_az.compatibilidad c WHERE c.id_modelo = mo.id_modelo)
+             AS total_compatibilidades
+    FROM electronica_az.modelo mo
+    JOIN electronica_az.marca m ON m.id_marca = mo.id_marca
+    WHERE ($1::uuid IS NULL OR mo.id_marca = $1)
+    ORDER BY m.nombre, mo.nombre
+  `, [idMarca ?? null])
+).rows;
+
+export const modelById = async (idModelo) => (
+  await query(
+    `SELECT mo.id_modelo, mo.nombre, mo.descripcion, mo.id_marca,
+            (SELECT COUNT(*)::int FROM electronica_az.producto p WHERE p.id_modelo = mo.id_modelo) AS total_productos
+     FROM electronica_az.modelo mo WHERE mo.id_modelo = $1`,
+    [idModelo],
+  )
+).rows[0];
+
+export const updateModel = (idModelo, nombre, descripcion, idMarca) => query(
+  `UPDATE electronica_az.modelo
+   SET nombre = COALESCE($2, nombre), descripcion = COALESCE($3, descripcion), id_marca = COALESCE($4, id_marca)
+   WHERE id_modelo = $1 RETURNING *`,
+  [idModelo, nombre ?? null, descripcion ?? null, idMarca ?? null],
 );
 
 export const getCatalogFilters = async () => {
@@ -112,10 +203,12 @@ export const getCatalogFilters = async () => {
 const adminProductSelect = `
   SELECT p.id_producto, p.codigo, p.nombre, p.descripcion, p.precio_venta::float8 AS precio_venta,
     p.activo, p.id_categoria, p.id_unidad_medida,
-    m.nombre AS marca, mo.nombre AS modelo
+    m.nombre AS marca, mo.nombre AS modelo,
+    p.id_ubicacion, u.codigo AS ubicacion_codigo, u.pasillo, u.estante
   FROM electronica_az.producto p
   LEFT JOIN electronica_az.marca m ON m.id_marca = p.id_marca
   LEFT JOIN electronica_az.modelo mo ON mo.id_modelo = p.id_modelo
+  LEFT JOIN electronica_az.ubicacion u ON u.id_ubicacion = p.id_ubicacion
 `;
 
 export const listAdminProducts = async () => (
@@ -181,12 +274,14 @@ const resolveBrandAndModel = async (client, { idMarca, idModelo, marca, modelo }
 
 const defaultLocation = async (client) => {
   const found = (await client.query(
-    "SELECT id_ubicacion FROM electronica_az.ubicacion WHERE lower(btrim(codigo)) = 'sin-ubicacion'",
+    'SELECT id_ubicacion FROM electronica_az.ubicacion WHERE lower(btrim(codigo)) = lower($1)',
+    [DEFAULT_LOCATION_CODE],
   )).rows[0];
   if (found) return found.id_ubicacion;
   return (await client.query(
     `INSERT INTO electronica_az.ubicacion(codigo, pasillo, estante)
-     VALUES ('SIN-UBICACION', 'N/A', 'N/A') RETURNING id_ubicacion`,
+     VALUES ($1, 'N/A', 'N/A') RETURNING id_ubicacion`,
+    [DEFAULT_LOCATION_CODE],
   )).rows[0].id_ubicacion;
 };
 
@@ -262,13 +357,13 @@ export const updateProduct = (idProducto, changes) => withTransaction(async (cli
   await client.query(`
     UPDATE electronica_az.producto
     SET nombre = $2, descripcion = $3, precio_venta = $4, activo = $5, id_categoria = $6,
-        id_unidad_medida = $7, id_marca = $8, id_modelo = $9
+        id_unidad_medida = $7, id_marca = $8, id_modelo = $9, id_ubicacion = $10
     WHERE id_producto = $1
   `, [
     idProducto, nombre, changes.descripcion ?? current.descripcion,
     changes.precioVenta ?? current.precio_venta, changes.activo ?? current.activo,
     changes.idCategoria ?? current.id_categoria, changes.idUnidadMedida ?? current.id_unidad_medida,
-    brandId, modelId,
+    brandId, modelId, changes.idUbicacion ?? current.id_ubicacion,
   ]);
   return adminProductById(idProducto, client);
 });
@@ -307,17 +402,33 @@ export const getPublicProducts = async (buscar, idCategoria, idMarca, idModelo, 
   return result.rows;
 };
 
+// Detalle del CU-10: ademas de la disponibilidad, la ubicacion fisica (null si el producto sigue
+// en SIN-UBICACION) y los modelos compatibles registrados en el CU-9.
 export const getPublicProductById = async (idProducto) => {
   const result = await query(`
     SELECT p.id_producto, p.codigo, p.nombre, p.descripcion, p.precio_venta,
       c.nombre AS categoria, m.nombre AS marca, mo.nombre AS modelo,
-      CASE WHEN e.stock_actual > 0 THEN 'DISPONIBLE' ELSE 'NO_DISPONIBLE' END AS disponibilidad
+      CASE WHEN e.stock_actual > 0 THEN 'DISPONIBLE' ELSE 'NO_DISPONIBLE' END AS disponibilidad,
+      CASE WHEN u.id_ubicacion IS NULL OR lower(btrim(u.codigo)) = lower($2) THEN NULL
+           ELSE json_build_object('codigo', u.codigo, 'pasillo', u.pasillo, 'estante', u.estante)
+      END AS ubicacion,
+      COALESCE((
+        SELECT json_agg(json_build_object(
+                 'idModelo', cm.id_modelo, 'modelo', cm.nombre, 'marca', cb.nombre,
+                 'observaciones', co.observaciones
+               ) ORDER BY cb.nombre, cm.nombre)
+        FROM electronica_az.compatibilidad co
+        JOIN electronica_az.modelo cm ON cm.id_modelo = co.id_modelo
+        JOIN electronica_az.marca cb ON cb.id_marca = cm.id_marca
+        WHERE co.id_producto = p.id_producto
+      ), '[]'::json) AS compatibles
     FROM electronica_az.producto p
     JOIN electronica_az.categoria c ON c.id_categoria = p.id_categoria
     LEFT JOIN electronica_az.marca m ON m.id_marca = p.id_marca
     LEFT JOIN electronica_az.modelo mo ON mo.id_modelo = p.id_modelo
+    LEFT JOIN electronica_az.ubicacion u ON u.id_ubicacion = p.id_ubicacion
     JOIN electronica_az.existencia e ON e.id_producto = p.id_producto
     WHERE p.activo AND p.id_producto = $1
-  `, [idProducto]);
+  `, [idProducto, DEFAULT_LOCATION_CODE]);
   return result.rows;
 };

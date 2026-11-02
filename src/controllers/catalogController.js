@@ -1,4 +1,5 @@
 import {
+  assignLocationService,
   createBrandService,
   createCategoryService,
   createCompatibilityService,
@@ -10,12 +11,18 @@ import {
   getCatalogFiltersService,
   getPublicProductByIdService,
   getPublicProductsService,
+  listBrandsService,
   listCategoriesService,
+  listLocationsService,
+  listModelsService,
   listProductsService,
   listUnitsService,
   setCategoryStateService,
   setUnitStateService,
+  updateBrandService,
   updateCategoryService,
+  updateLocationService,
+  updateModelService,
   updateProductService,
   updateUnitService,
 } from '../services/catalogService.js';
@@ -39,13 +46,22 @@ export const createCategoryController = createCatalogController(
   createCategoryService,
   (data) => ({ accion: 'CATEGORIA_CREADA', objeto: `Categoría ${data.nombre}` }),
 );
-export const createBrandController = createCatalogController(createBrandService);
+export const createBrandController = createCatalogController(
+  createBrandService,
+  (data) => ({ accion: 'MARCA_CREADA', objeto: `Marca ${data.nombre}` }),
+);
 export const createUnitController = createCatalogController(
   createUnitService,
   (data) => ({ accion: 'UNIDAD_CREADA', objeto: `Unidad ${data.nombre} (${data.simbolo})` }),
 );
-export const createLocationController = createCatalogController(createLocationService);
-export const createModelController = createCatalogController(createModelService);
+export const createLocationController = createCatalogController(
+  createLocationService,
+  (data) => ({ accion: 'UBICACION_CREADA', objeto: `Ubicación ${data.codigo}` }),
+);
+export const createModelController = createCatalogController(
+  createModelService,
+  (data) => ({ accion: 'MODELO_CREADO', objeto: `Modelo ${data.nombre}` }),
+);
 export const createProductController = createCatalogController(
   createProductService,
   (data) => ({ accion: 'PRODUCTO_CREADO', objeto: `Producto ${data.nombre}` }),
@@ -96,6 +112,35 @@ export const setUnitStateController = respond(
   (req, data) => ({
     accion: stateAction(req.validated.body.activo, 'UNIDAD_ACTIVADA', 'UNIDAD_DESACTIVADA'),
     objeto: `Unidad ${data.nombre} (${data.simbolo})`,
+  }),
+);
+
+export const listBrandsController = respond(() => listBrandsService());
+export const updateBrandController = respond(
+  (req) => updateBrandService(req.validated.params.id, req.validated.body),
+  200,
+  (_req, data) => ({ accion: 'MARCA_ACTUALIZADA', objeto: `Marca ${data.nombre}` }),
+);
+
+export const listModelsController = respond((req) => listModelsService(req.validated.query));
+export const updateModelController = respond(
+  (req) => updateModelService(req.validated.params.id, req.validated.body),
+  200,
+  (_req, data) => ({ accion: 'MODELO_ACTUALIZADO', objeto: `Modelo ${data.nombre}` }),
+);
+
+export const listLocationsController = respond(() => listLocationsService());
+export const updateLocationController = respond(
+  (req) => updateLocationService(req.validated.params.id, req.validated.body),
+  200,
+  (_req, data) => ({ accion: 'UBICACION_ACTUALIZADA', objeto: `Ubicación ${data.codigo}` }),
+);
+export const assignLocationController = respond(
+  (req) => assignLocationService(req.validated.params.id, req.validated.body),
+  200,
+  (_req, data) => ({
+    accion: 'UBICACION_ASIGNADA',
+    objeto: `Ubicación ${data.codigo} → ${data.actualizados} producto(s)`,
   }),
 );
 

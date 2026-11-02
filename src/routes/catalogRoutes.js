@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import {
+  assignLocationController,
   createBrandController,
   createCategoryController,
   createCompatibilityController,
@@ -11,16 +12,23 @@ import {
   getCatalogFiltersController,
   getPublicProductByIdController,
   getPublicProductsController,
+  listBrandsController,
   listCategoriesController,
+  listLocationsController,
+  listModelsController,
   listProductsController,
   listUnitsController,
   setCategoryStateController,
   setUnitStateController,
+  updateBrandController,
   updateCategoryController,
+  updateLocationController,
+  updateModelController,
   updateProductController,
   updateUnitController,
 } from '../controllers/catalogController.js';
 import {
+  assignLocationDto,
   compatibilityParamsDto,
   createBrandDto,
   createCategoryDto,
@@ -30,10 +38,14 @@ import {
   createProductDto,
   createUnitDto,
   idParamsDto,
+  listModelsQueryDto,
   productIdParamsDto,
   publicProductsQueryDto,
   stateDto,
+  updateBrandDto,
   updateCategoryDto,
+  updateLocationDto,
+  updateModelDto,
   updateProductDto,
   updateUnitDto,
 } from '../dto/catalog.dto.js';
@@ -101,9 +113,45 @@ catalogRouter.patch(
   setUnitStateController,
 );
 
+// Marcas (CU-6)
+catalogRouter.get('/marcas', ...consultCatalog, listBrandsController);
 catalogRouter.post('/marcas', ...manageCatalog, validateBody(createBrandDto), createBrandController);
-catalogRouter.post('/ubicaciones', ...manageCatalog, validateBody(createLocationDto), createLocationController);
+catalogRouter.patch(
+  '/marcas/:id',
+  ...manageCatalog,
+  validateParams(idParamsDto),
+  validateBody(updateBrandDto),
+  updateBrandController,
+);
+
+// Modelos (CU-7)
+catalogRouter.get('/modelos', ...consultCatalog, validateQuery(listModelsQueryDto), listModelsController);
 catalogRouter.post('/modelos', ...manageCatalog, validateBody(createModelDto), createModelController);
+catalogRouter.patch(
+  '/modelos/:id',
+  ...manageCatalog,
+  validateParams(idParamsDto),
+  validateBody(updateModelDto),
+  updateModelController,
+);
+
+// Ubicaciones (CU-21)
+catalogRouter.get('/ubicaciones', ...consultCatalog, listLocationsController);
+catalogRouter.post('/ubicaciones', ...manageCatalog, validateBody(createLocationDto), createLocationController);
+catalogRouter.patch(
+  '/ubicaciones/:id',
+  ...manageCatalog,
+  validateParams(idParamsDto),
+  validateBody(updateLocationDto),
+  updateLocationController,
+);
+catalogRouter.patch(
+  '/ubicaciones/:id/productos',
+  ...manageCatalog,
+  validateParams(idParamsDto),
+  validateBody(assignLocationDto),
+  assignLocationController,
+);
 
 // Productos
 catalogRouter.get('/productos', ...consultCatalog, listProductsController);

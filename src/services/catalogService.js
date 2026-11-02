@@ -1,5 +1,6 @@
 import { errorCodes } from '../config/errorCodes.js';
 import {
+  assignLocationToProducts,
   categoryById,
   createBrand,
   createCategory,
@@ -13,12 +14,20 @@ import {
   getPublicProductById,
   getPublicProducts,
   listAdminProducts,
+  listBrands,
   listCategories,
+  listLocations,
+  listModels,
   listUnits,
+  locationById,
+  modelById,
   setCategoryActive,
   setUnitActive,
   unitById,
+  updateBrand,
   updateCategory,
+  updateLocation,
+  updateModel,
   updateProduct,
   updateUnit,
 } from '../repositories/catalogRepository.js';
@@ -139,24 +148,102 @@ export const setUnitStateService = async (idUnidad, activo) => {
   return result.rows[0];
 };
 
-export const createBrandService = ({ nombre }) => getCreatedRow(createBrand, [nombre]);
-export const createLocationService = ({ codigo, pasillo, estante }) => (
-  getCreatedRow(createLocation, [codigo, pasillo, estante])
+// Los indices unicos normalizados (marca por nombre, modelo por marca+nombre, ubicacion por codigo)
+// son la fuente de verdad; aqui solo se traduce la violacion a un mensaje para el formulario.
+const saveUnique = async (repository, parameters, duplicateMessage, campo) => {
+  try {
+    return (await repository(...parameters)).rows[0] ?? null;
+  } catch (error) {
+    if (error.code === '23505') throw conflict(duplicateMessage, campo);
+    if (error.code === '23503') throw notFound('La marca seleccionada no existe.');
+    throw error;
+  }
+};
+
+// ---------- Marcas (CU-6) ----------
+
+export const listBrandsService = listBrands;
+
+export const createBrandService = ({ nombre }) => (
+  saveUnique(createBrand, [nombre], 'Ya existe una marca con ese nombre.', 'nombre')
 );
+
+export const updateBrandService = async (idMarca, { nombre }) => {
+  const brand = await saveUnique(updateBrand, [idMarca, nombre], 'Ya existe una marca con ese nombre.', 'nombre');
+  if (!brand) throw notFound('La marca no existe.');
+  return brand;
+};
+
+// ---------- Modelos (CU-7) ----------
+
+export const listModelsService = ({ idMarca } = {}) => listModels(idMarca);
+
+const duplicatedModel = 'Ya existe un modelo con ese nombre para la marca seleccionada.';
+
 export const createModelService = ({ nombre, descripcion, idMarca }) => (
-  getCreatedRow(createModel, [nombre, descripcion, idMarca])
+  saveUnique(createModel, [nombre, descripcion, idMarca], duplicatedModel, 'nombre')
 );
+
+export const updateModelService = async (idModelo, { nombre, descripcion, idMarca }) => {
+  const current = await modelById(idModelo);
+  if (!current) throw notFound('El modelo no existe.');
+  // Los productos guardan marca y modelo juntos: mover el modelo a otra marca los dejaria incoherentes.
+  if (idMarca && idMarca !== current.id_marca && current.total_productos > 0) {
+    throw businessRule(
+      'No se puede cambiar la marca de un modelo que ya tiene productos asociados.',
+      'idMarca',
+      'MODEL_HAS_PRODUCTS',
+    );
+  }
+  return saveUnique(updateModel, [idModelo, nombre, descripcion, idMarca], duplicatedModel, 'nombre');
+};
+
+// ---------- Ubicaciones (CU-21) ----------
+
+export const listLocationsService = listLocations;
+
+const duplicatedLocation = 'Ya existe una ubicación con ese código.';
+
+export const createLocationService = ({ codigo, pasillo, estante }) => (
+  saveUnique(createLocation, [codigo, pasillo, estante], duplicatedLocation, 'codigo')
+);
+
+export const updateLocationService = async (idUbicacion, { codigo, pasillo, estante }) => {
+  const current = await locationById(idUbicacion);
+  if (!current) throw notFound('La ubicación no existe.');
+  if (current.es_predeterminada) {
+    throw businessRule('La ubicación SIN-UBICACION la gestiona el sistema y no se puede editar.', 'codigo');
+  }
+  return saveUnique(updateLocation, [idUbicacion, codigo, pasillo, estante], duplicatedLocation, 'codigo');
+};
+
+export const assignLocationService = async (idUbicacion, { idProductos }) => {
+  const location = await locationById(idUbicacion);
+  if (!location) throw notFound('La ubicación no existe.');
+  const ids = [...new Set(idProductos)];
+  const result = await assignLocationToProducts(idUbicacion, ids);
+  if (result.missing.length > 0) {
+    throw new AppError(errorCodes.NOT_FOUND, 404, {
+      mensaje: 'Algunos productos no existen.',
+      idProductos: result.missing,
+    });
+  }
+  return { idUbicacion, codigo: location.codigo, actualizados: result.actualizados };
+};
 
 // ---------- Productos ----------
 
 export const listProductsService = listAdminProducts;
 
-const assertReferences = async ({ idCategoria, idUnidadMedida }) => {
+const assertReferences = async ({ idCategoria, idUnidadMedida, idUbicacion }) => {
   if (idCategoria && !(await categoryById(idCategoria))) {
     throw businessRule('La categoría seleccionada no existe.', 'categoriaId');
   }
   if (idUnidadMedida && !(await unitById(idUnidadMedida))) {
     throw businessRule('La unidad de medida seleccionada no existe.', 'unidadId');
+  }
+  if (idUbicacion && !(await locationById(idUbicacion))) {
+    throw businessRule('La ubicación seleccionada no existe.', 'idUbicacion');
   }
 };
 

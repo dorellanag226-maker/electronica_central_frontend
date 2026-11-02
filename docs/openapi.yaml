@@ -513,6 +513,29 @@ paths:
                   type: string
             example:
               nombre: ejemplo-nombre
+    get:
+      operationId: listMarcas
+      summary: Listar marcas
+      tags:
+        - Catalogo
+      responses:
+        "200":
+          description: OK
+        "201":
+          description: Created
+        "400":
+          description: Validation error
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden
+        "404":
+          description: Not found
+        "422":
+          description: Business rule
+      security:
+        - bearerAuth: []
+      description: Requiere permiso `CATALOGO_CONSULTAR` (o roles Admin/Dev según seed).
   /api/unidades:
     post:
       operationId: createUnidad
@@ -603,6 +626,29 @@ paths:
               codigo: ejemplo-codigo
               pasillo: ejemplo-pasillo
               estante: ejemplo-estante
+    get:
+      operationId: listUbicaciones
+      summary: Listar ubicaciones
+      tags:
+        - Catalogo
+      responses:
+        "200":
+          description: OK
+        "201":
+          description: Created
+        "400":
+          description: Validation error
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden
+        "404":
+          description: Not found
+        "422":
+          description: Business rule
+      security:
+        - bearerAuth: []
+      description: Requiere permiso `CATALOGO_CONSULTAR` (o roles Admin/Dev según seed).
   /api/modelos:
     post:
       operationId: createModelo
@@ -648,6 +694,224 @@ paths:
               nombre: ejemplo-nombre
               descripcion: ejemplo-descripcion
               idMarca: "{{idMarca}}"
+    get:
+      operationId: listModelos
+      summary: Listar modelos (opcional por marca)
+      tags:
+        - Catalogo
+      parameters:
+        - name: idMarca
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+        "201":
+          description: Created
+        "400":
+          description: Validation error
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden
+        "404":
+          description: Not found
+        "422":
+          description: Business rule
+      security:
+        - bearerAuth: []
+      description: Requiere permiso `CATALOGO_CONSULTAR` (o roles Admin/Dev según seed).
+  /api/marcas/{id}:
+    patch:
+      operationId: updateMarca
+      summary: Editar marca
+      tags:
+        - Catalogo
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+        "201":
+          description: Created
+        "400":
+          description: Validation error
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden
+        "404":
+          description: Not found
+        "422":
+          description: Business rule
+      security:
+        - bearerAuth: []
+      description: Requiere permiso `CATALOGO_GESTIONAR` (o roles Admin/Dev según seed).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - nombre
+              properties:
+                nombre:
+                  type: string
+            example:
+              nombre: ejemplo-nombre
+  /api/modelos/{id}:
+    patch:
+      operationId: updateModelo
+      summary: Editar modelo
+      tags:
+        - Catalogo
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+        "201":
+          description: Created
+        "400":
+          description: Validation error
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden
+        "404":
+          description: Not found
+        "422":
+          description: Business rule
+      security:
+        - bearerAuth: []
+      description: Requiere permiso `CATALOGO_GESTIONAR` (o roles Admin/Dev según seed).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nombre:
+                  type: string
+                descripcion:
+                  type: string
+                idMarca:
+                  type: string
+                  format: uuid
+            example:
+              nombre: ejemplo-nombre
+              descripcion: ejemplo-descripcion
+              idMarca: "{{idMarca}}"
+  /api/ubicaciones/{id}:
+    patch:
+      operationId: updateUbicacion
+      summary: Editar ubicación
+      tags:
+        - Catalogo
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+        "201":
+          description: Created
+        "400":
+          description: Validation error
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden
+        "404":
+          description: Not found
+        "422":
+          description: Business rule
+      security:
+        - bearerAuth: []
+      description: Requiere permiso `CATALOGO_GESTIONAR` (o roles Admin/Dev según seed).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                codigo:
+                  type: string
+                pasillo:
+                  type: string
+                estante:
+                  type: string
+            example:
+              codigo: ejemplo-codigo
+              pasillo: ejemplo-pasillo
+              estante: ejemplo-estante
+  /api/ubicaciones/{id}/productos:
+    patch:
+      operationId: assignUbicacionProductos
+      summary: Asignar ubicación a productos
+      tags:
+        - Catalogo
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+        "201":
+          description: Created
+        "400":
+          description: Validation error
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden
+        "404":
+          description: Not found
+        "422":
+          description: Business rule
+      security:
+        - bearerAuth: []
+      description: Requiere permiso `CATALOGO_GESTIONAR` (o roles Admin/Dev según seed).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - idProductos
+              properties:
+                idProductos:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+            example:
+              idProductos: []
   /api/productos:
     post:
       operationId: createProducto
@@ -726,7 +990,7 @@ paths:
   /api/productos/{id}:
     patch:
       operationId: deactivateProducto
-      summary: Desactivar producto
+      summary: Editar producto (datos, estado o ubicación)
       tags:
         - Catalogo
       parameters:
@@ -760,15 +1024,16 @@ paths:
           application/json:
             schema:
               type: object
-              required:
-                - activo
               properties:
                 activo:
                   type: boolean
-                  enum:
-                    - false
+                  example: false
+                idUbicacion:
+                  type: string
+                  format: uuid
             example:
               activo: false
+              idUbicacion: "{{idUbicacion}}"
   /api/productos/{id}/compatibilidades:
     post:
       operationId: createCompatibilidad
@@ -1702,7 +1967,7 @@ paths:
                         type: number
             example:
               idProveedor: "{{idProveedor}}"
-              fecha: 2026-11-01T23:40:19.477Z
+              fecha: 2026-11-02T01:48:20.906Z
               detalles:
                 - idProducto: "{{idProducto}}"
                   cantidad: 1
@@ -1802,7 +2067,7 @@ paths:
                         type: number
             example:
               idProveedor: "{{idProveedor}}"
-              fecha: 2026-11-01T23:40:19.479Z
+              fecha: 2026-11-02T01:48:20.930Z
               detalles:
                 - idProducto: "{{idProducto}}"
                   cantidad: 1
