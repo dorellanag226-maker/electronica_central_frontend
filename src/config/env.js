@@ -16,6 +16,14 @@ const envSchema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
   SMTP_FROM: z.string().default('Electrónica Central AZ <no-reply@example.test>'),
+  // Pasarela de pago (CU-16). Sin STRIPE_SECRET_KEY el cobro en linea responde 503 y lo demas sigue igual.
+  STRIPE_SECRET_KEY: z.string().optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().optional(),
+  STRIPE_CURRENCY: z.string().trim().toLowerCase().length(3).default('bob'),
+  // Stripe exige que la sesion de pago dure entre 30 minutos y 24 horas.
+  STRIPE_CHECKOUT_EXPIRES_MINUTES: z.coerce.number().int().min(30).max(24 * 60).default(30),
+  PAYMENT_SUCCESS_URL: z.string().url().default('http://localhost:5173/pagos/exito'),
+  PAYMENT_CANCEL_URL: z.string().url().default('http://localhost:5173/pagos/cancelado'),
 });
 
 const parsed = envSchema.safeParse(process.env);

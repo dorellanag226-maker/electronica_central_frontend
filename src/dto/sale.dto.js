@@ -53,3 +53,16 @@ export const updateSaleDto = z.object({
 export const idempotentSaleActionDto = z.object({
   claveIdempotencia: idempotencyKeyDto,
 });
+
+// Solo se anula por error de registro; la observacion explica cual fue el error.
+export const anularSaleDto = z.object({
+  claveIdempotencia: idempotencyKeyDto,
+  observacion: z.string().trim().min(5).max(500),
+});
+
+export const defectReturnDto = z.object({
+  claveIdempotencia: idempotencyKeyDto,
+  idProducto: uuidDto,
+  cantidad: positiveQuantityDto,
+  observacion: z.string().trim().min(5).max(500),
+});

@@ -31,3 +31,7 @@ scripts/seed/seed-ids.json
 scripts/seed/precios-from-datos.csv
 scripts/seed/_checkUsers.js
 docs/postman/*seeded*.json
+
+# Documentacion del proyecto (Word): se maneja fuera del repositorio
+documento/
+~$*

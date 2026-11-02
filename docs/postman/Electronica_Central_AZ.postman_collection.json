@@ -1522,7 +1522,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"idProveedor\": \"{{idProveedor}}\",\n  \"fecha\": \"2026-11-02T02:11:34.094Z\",\n  \"detalles\": [\n    {\n      \"idProducto\": \"{{idProducto}}\",\n      \"cantidad\": 1,\n      \"costoUnitario\": 1\n    }\n  ]\n}",
+              "raw": "{\n  \"idProveedor\": \"{{idProveedor}}\",\n  \"fecha\": \"2026-11-02T06:55:03.897Z\",\n  \"detalles\": [\n    {\n      \"idProducto\": \"{{idProducto}}\",\n      \"cantidad\": 1,\n      \"costoUnitario\": 1\n    }\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1581,7 +1581,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"idProveedor\": \"{{idProveedor}}\",\n  \"fecha\": \"2026-11-02T02:11:34.094Z\",\n  \"detalles\": [\n    {\n      \"idProducto\": \"{{idProducto}}\",\n      \"cantidad\": 1,\n      \"costoUnitario\": 1\n    }\n  ]\n}",
+              "raw": "{\n  \"idProveedor\": \"{{idProveedor}}\",\n  \"fecha\": \"2026-11-02T06:55:03.897Z\",\n  \"detalles\": [\n    {\n      \"idProducto\": \"{{idProducto}}\",\n      \"cantidad\": 1,\n      \"costoUnitario\": 1\n    }\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1818,7 +1818,7 @@
               }
             ],
             "url": "{{baseUrl}}/api/ventas/{{id}}/anular",
-            "description": "Anular venta | permiso: VENTAS_GESTIONAR",
+            "description": "Anular venta por error de registro (devuelve stock y pagos) | permiso: VENTAS_GESTIONAR",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -1831,7 +1831,41 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"claveIdempotencia\": \"idem-{{$timestamp}}\"\n}",
+              "raw": "{\n  \"claveIdempotencia\": \"idem-{{$timestamp}}\",\n  \"observacion\": \"Se registró el producto equivocado\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /api/ventas/{id}/devoluciones",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/ventas/{{id}}/devoluciones",
+            "description": "Devolución por producto fallado (cambio si hay stock, si no reembolso) | permiso: VENTAS_GESTIONAR",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"claveIdempotencia\": \"idem-{{$timestamp}}\",\n  \"idProducto\": \"{{idProducto}}\",\n  \"cantidad\": 1,\n  \"observacion\": \"No enciende\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1926,6 +1960,67 @@
                   "type": "string"
                 }
               ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /api/ventas/{id}/pagos/en-linea",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/ventas/{{id}}/pagos/en-linea",
+            "description": "Generar cobro en línea (Stripe Checkout); devuelve urlPago | permiso: VENTAS_GESTIONAR",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"monto\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /api/pagos/webhook/stripe",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/pagos/webhook/stripe",
+            "description": "Webhook de Stripe (lo llama la pasarela; requiere cabecera Stripe-Signature)",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"checkout.session.completed\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "response": []

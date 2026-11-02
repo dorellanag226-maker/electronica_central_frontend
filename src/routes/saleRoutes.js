@@ -9,17 +9,21 @@ import {
   getSaleController,
   listSalePaymentsController,
   listSalesController,
+  registerDefectReturnController,
   updateSaleController,
 } from '../controllers/saleController.js';
 import {
+  anularSaleDto,
   createSaleDto,
   comprobanteQueryDto,
+  defectReturnDto,
   idempotentSaleActionDto,
   listSalesQueryDto,
   saleIdParamsDto,
   updateSaleDto,
 } from '../dto/sale.dto.js';
-import { createPaymentDto } from '../dto/payment.dto.js';
+import { createOnlinePaymentController } from '../controllers/paymentController.js';
+import { createOnlinePaymentDto, createPaymentDto } from '../dto/payment.dto.js';
 import { authenticate } from '../middlewares/authMiddleware.js';
 import { requirePermissions } from '../middlewares/authorizationMiddleware.js';
 import { validateBody, validateParams, validateQuery } from '../middlewares/validateDto.js';
@@ -48,8 +52,15 @@ saleRouter.post(
   '/:id/anular',
   ...manageSales,
   validateParams(saleIdParamsDto),
-  validateBody(idempotentSaleActionDto),
+  validateBody(anularSaleDto),
   anularSaleController,
+);
+saleRouter.post(
+  '/:id/devoluciones',
+  ...manageSales,
+  validateParams(saleIdParamsDto),
+  validateBody(defectReturnDto),
+  registerDefectReturnController,
 );
 saleRouter.get(
   '/:id/comprobante',
@@ -77,6 +88,13 @@ saleRouter.post(
   validateParams(saleIdParamsDto),
   validateBody(createPaymentDto),
   createSalePaymentController,
+);
+saleRouter.post(
+  '/:id/pagos/en-linea',
+  ...manageSales,
+  validateParams(saleIdParamsDto),
+  validateBody(createOnlinePaymentDto),
+  createOnlinePaymentController,
 );
 
 export default saleRouter;

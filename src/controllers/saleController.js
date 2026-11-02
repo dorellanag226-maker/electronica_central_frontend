@@ -6,6 +6,7 @@ import {
   getComprobanteService,
   getSaleService,
   listSalesService,
+  registerDefectReturnService,
   updateSaleService,
 } from '../services/saleService.js';
 import {
@@ -130,6 +131,19 @@ export const createSalePaymentController = async (req, res) => {
       req.auth.usuario,
     );
     return res.status(201).json({ data });
+  } catch (error) {
+    return sendError(res, error);
+  }
+};
+
+export const registerDefectReturnController = async (req, res) => {
+  try {
+    const result = await registerDefectReturnService(
+      req.validated.params.id,
+      req.validated.body,
+      req.auth.usuario,
+    );
+    return res.status(result.statusHttp).json({ data: result.data });
   } catch (error) {
     return sendError(res, error);
   }

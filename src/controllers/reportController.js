@@ -39,6 +39,7 @@ export const reportVentasController = async (req, res) => {
         { header: 'Total', key: 'total', width: 12 },
         { header: 'Cobrado', key: 'cobrado', width: 12 },
         { header: 'Saldo', key: 'saldo', width: 12 },
+        { header: 'Reembolsado', key: 'reembolsado', width: 14 },
       ],
       rows: data.items,
     }, 'Reporte de ventas');

@@ -74,6 +74,22 @@ const seedProductWithStock = async (token, label, stock) => {
   return productId;
 };
 
+// CU-16 antes de CU-15: el pago se registra y confirma con la venta en BORRADOR.
+const payAndConfirm = async (authorize, idVenta, monto, key, extra = {}) => {
+  const pay = await request(app).post(`/api/ventas/${idVenta}/pagos`).set(authorize).send({
+    monto,
+    metodo: 'EFECTIVO',
+    ...extra,
+  });
+  expect(pay.status).toBe(201);
+  const confirmed = await request(app)
+    .post(`/api/pagos/${pay.body.data.idPago}/confirmar`)
+    .set(authorize)
+    .send({ claveIdempotencia: key });
+  expect(confirmed.status).toBe(200);
+  return pay.body.data;
+};
+
 describe('sales flow with PostgreSQL', () => {
   let adminToken;
   let vendedorToken;
@@ -115,7 +131,7 @@ describe('sales flow with PostgreSQL', () => {
     productId = await seedProductWithStock(adminToken, suffix, 10);
   });
 
-  test('customer denied; draft does not change stock; confirm creates comprobante', async () => {
+  test('customer denied; confirm requires full payment; confirm creates comprobante', async () => {
     const customer = await request(app).post('/api/auth/registro').send({
       nombreUsuario: `cli.sale.${suffix}`,
       correo: `cli.sale.${suffix}@example.test`,
@@ -146,6 +162,46 @@ describe('sales flow with PostgreSQL', () => {
     expect(draft.body.data.detalles[0]).not.toHaveProperty('costoUnitarioHistorico');
     saleId = draft.body.data.idVenta;
 
+    const unpaid = await request(app)
+      .post(`/api/ventas/${saleId}/confirmar`)
+      .set(authorize)
+      .send({ claveIdempotencia: `conf-unpaid-${suffix}` });
+    expect(unpaid.status).toBe(422);
+    expect(unpaid.body.error.details.reason).toBe('SALE_BALANCE_NOT_ZERO');
+
+    const pay = await request(app).post(`/api/ventas/${saleId}/pagos`).set(authorize).send({
+      monto: 5.2,
+      metodo: 'EFECTIVO',
+    });
+    expect(pay.status).toBe(201);
+    expect(pay.body.data.monto).toBe(5.5);
+    expect(pay.body.data.estado).toBe('PENDIENTE');
+
+    const editWithPayment = await request(app).patch(`/api/ventas/${saleId}`).set(authorize).send({
+      idCliente: clientId,
+      detalles: [{ idProducto: productId, cantidad: 3, precioUnitario: 10 }],
+    });
+    expect(editWithPayment.status).toBe(422);
+    expect(editWithPayment.body.error.details.reason).toBe('SALE_HAS_PAYMENTS');
+
+    const confirmPay = await request(app)
+      .post(`/api/pagos/${pay.body.data.idPago}/confirmar`)
+      .set(authorize)
+      .send({ claveIdempotencia: `pay-${suffix}` });
+    expect(confirmPay.status).toBe(200);
+
+    const partial = await request(app)
+      .post(`/api/ventas/${saleId}/confirmar`)
+      .set(authorize)
+      .send({ claveIdempotencia: `conf-partial-${suffix}` });
+    expect(partial.status).toBe(422);
+    expect(partial.body.error.details.saldo).toBe(14.5);
+
+    await payAndConfirm(authorize, saleId, 14.5, `pay2-${suffix}`, {
+      metodo: 'QR',
+      referenciaExterna: `QR-${suffix}`,
+    });
+
     const stockDraft = await query(
       'SELECT stock_actual FROM electronica_az.existencia WHERE id_producto = $1',
       [productId],
@@ -158,6 +214,7 @@ describe('sales flow with PostgreSQL', () => {
       .send({ claveIdempotencia: `conf-${suffix}` });
     expect(confirm.status).toBe(200);
     expect(confirm.body.data.estado).toBe('CONFIRMADA');
+    expect(confirm.body.data.saldo).toBe(0);
     expect(confirm.body.data.comprobante.numero).toMatch(/^V-\d{8}-\d{4}$/);
 
     const confirmAgain = await request(app)
@@ -182,40 +239,27 @@ describe('sales flow with PostgreSQL', () => {
     expect(movement.rows[0].id_detalle_venta).toBeTruthy();
   });
 
-  test('payments ceil to 0.50; delivery requires zero balance; anular ownership', async () => {
+  test('final payment settles a total that is not a multiple of 0.50', async () => {
     const authorize = { Authorization: `Bearer ${vendedorToken}` };
-
-    const pay = await request(app).post(`/api/ventas/${saleId}/pagos`).set(authorize).send({
-      monto: 5.2,
-      metodo: 'EFECTIVO',
+    const product = await seedProductWithStock(adminToken, `${suffix}c`, 5);
+    const draft = await request(app).post('/api/ventas').set(authorize).send({
+      idCliente: clientId,
+      detalles: [{ idProducto: product, cantidad: 1, precioUnitario: 10.3 }],
     });
-    expect(pay.status).toBe(201);
-    expect(pay.body.data.monto).toBe(5.5);
-    expect(pay.body.data.estado).toBe('PENDIENTE');
+    expect(draft.status).toBe(201);
 
-    const confirmPay = await request(app)
-      .post(`/api/pagos/${pay.body.data.idPago}/confirmar`)
-      .set(authorize)
-      .send({ claveIdempotencia: `pay-${suffix}` });
-    expect(confirmPay.status).toBe(200);
+    const paid = await payAndConfirm(authorize, draft.body.data.idVenta, 10.3, `pay-exact-${suffix}`);
+    expect(paid.monto).toBe(10.3);
 
-    const deliverBlocked = await request(app)
-      .post(`/api/ventas/${saleId}/entrega`)
+    const confirm = await request(app)
+      .post(`/api/ventas/${draft.body.data.idVenta}/confirmar`)
       .set(authorize)
-      .send({ claveIdempotencia: `ent-bad-${suffix}` });
-    expect(deliverBlocked.status).toBe(422);
+      .send({ claveIdempotencia: `conf-exact-${suffix}` });
+    expect(confirm.status).toBe(200);
+  });
 
-    const payRest = await request(app).post(`/api/ventas/${saleId}/pagos`).set(authorize).send({
-      monto: 14.5,
-      metodo: 'QR',
-      referenciaExterna: `QR-${suffix}`,
-    });
-    expect(payRest.status).toBe(201);
-    const confirmRest = await request(app)
-      .post(`/api/pagos/${payRest.body.data.idPago}/confirmar`)
-      .set(authorize)
-      .send({ claveIdempotencia: `pay2-${suffix}` });
-    expect(confirmRest.status).toBe(200);
+  test('delivery after full payment; anular needs reason, ownership, returns stock and payments', async () => {
+    const authorize = { Authorization: `Bearer ${vendedorToken}` };
 
     const deliver = await request(app)
       .post(`/api/ventas/${saleId}/entrega`)
@@ -223,31 +267,31 @@ describe('sales flow with PostgreSQL', () => {
       .send({ claveIdempotencia: `ent-${suffix}` });
     expect(deliver.status).toBe(201);
 
-    const anularPaid = await request(app)
-      .post(`/api/ventas/${saleId}/anular`)
-      .set(authorize)
-      .send({ claveIdempotencia: `anul-paid-${suffix}` });
-    expect(anularPaid.status).toBe(422);
-
     const productB = await seedProductWithStock(adminToken, `${suffix}b`, 5);
-    const otherSale = await request(app)
-      .post('/api/ventas')
-      .set('Authorization', `Bearer ${otherVendorToken}`)
-      .send({
-        idCliente: clientId,
-        detalles: [{ idProducto: productB, cantidad: 1, precioUnitario: 8 }],
-      });
+    const otherAuth = { Authorization: `Bearer ${otherVendorToken}` };
+    const otherSale = await request(app).post('/api/ventas').set(otherAuth).send({
+      idCliente: clientId,
+      detalles: [{ idProducto: productB, cantidad: 1, precioUnitario: 8 }],
+    });
     expect(otherSale.status).toBe(201);
+    const otherId = otherSale.body.data.idVenta;
+    await payAndConfirm(otherAuth, otherId, 8, `pay-other-${suffix}`);
     const otherConfirm = await request(app)
-      .post(`/api/ventas/${otherSale.body.data.idVenta}/confirmar`)
-      .set('Authorization', `Bearer ${otherVendorToken}`)
+      .post(`/api/ventas/${otherId}/confirmar`)
+      .set(otherAuth)
       .send({ claveIdempotencia: `conf-other-${suffix}` });
     expect(otherConfirm.status).toBe(200);
 
+    const sinMotivo = await request(app)
+      .post(`/api/ventas/${otherId}/anular`)
+      .set(otherAuth)
+      .send({ claveIdempotencia: `anul-sin-${suffix}` });
+    expect(sinMotivo.status).toBe(400);
+
     const anularAjena = await request(app)
-      .post(`/api/ventas/${otherSale.body.data.idVenta}/anular`)
+      .post(`/api/ventas/${otherId}/anular`)
       .set(authorize)
-      .send({ claveIdempotencia: `anul-ajena-${suffix}` });
+      .send({ claveIdempotencia: `anul-ajena-${suffix}`, observacion: 'Producto equivocado' });
     expect(anularAjena.status).toBe(403);
 
     const stockBeforeAnul = await query(
@@ -255,11 +299,14 @@ describe('sales flow with PostgreSQL', () => {
       [productB],
     );
     const anularOwn = await request(app)
-      .post(`/api/ventas/${otherSale.body.data.idVenta}/anular`)
-      .set('Authorization', `Bearer ${otherVendorToken}`)
-      .send({ claveIdempotencia: `anul-own-${suffix}` });
+      .post(`/api/ventas/${otherId}/anular`)
+      .set(otherAuth)
+      .send({ claveIdempotencia: `anul-own-${suffix}`, observacion: 'Se registro el producto equivocado' });
     expect(anularOwn.status).toBe(200);
     expect(anularOwn.body.data.estado).toBe('ANULADA');
+    expect(anularOwn.body.data.observacionAnulacion).toBe('Se registro el producto equivocado');
+    expect(anularOwn.body.data.pagos.map((p) => p.estado)).toEqual(['ANULADO']);
+    expect(anularOwn.body.data.cobrado).toBe(0);
 
     const stockAfterAnul = await query(
       'SELECT stock_actual FROM electronica_az.existencia WHERE id_producto = $1',
@@ -274,5 +321,66 @@ describe('sales flow with PostgreSQL', () => {
     expect(comprobante.status).toBe(200);
     expect(comprobante.body.data.numero).toBeTruthy();
     expect(comprobante.body.data.total).toBe(20);
+  });
+
+  test('defect return: exchange while there is stock, refund when there is none', async () => {
+    const authorize = { Authorization: `Bearer ${vendedorToken}` };
+    const productD = await seedProductWithStock(adminToken, `${suffix}d`, 3);
+    const draft = await request(app).post('/api/ventas').set(authorize).send({
+      idCliente: clientId,
+      detalles: [{ idProducto: productD, cantidad: 2, precioUnitario: 15 }],
+    });
+    expect(draft.status).toBe(201);
+    const idVenta = draft.body.data.idVenta;
+    await payAndConfirm(authorize, idVenta, 30, `pay-dev-${suffix}`);
+    const confirm = await request(app)
+      .post(`/api/ventas/${idVenta}/confirmar`)
+      .set(authorize)
+      .send({ claveIdempotencia: `conf-dev-${suffix}` });
+    expect(confirm.status).toBe(200);
+
+    const cambio = await request(app).post(`/api/ventas/${idVenta}/devoluciones`).set(authorize).send({
+      claveIdempotencia: `dev-1-${suffix}`,
+      idProducto: productD,
+      cantidad: 1,
+      observacion: 'No enciende',
+    });
+    expect(cambio.status).toBe(201);
+    expect(cambio.body.data).toMatchObject({ tipo: 'CAMBIO', montoReembolso: 0, stockRestante: 0 });
+
+    const reembolso = await request(app).post(`/api/ventas/${idVenta}/devoluciones`).set(authorize).send({
+      claveIdempotencia: `dev-2-${suffix}`,
+      idProducto: productD,
+      cantidad: 1,
+      observacion: 'Pantalla rota',
+    });
+    expect(reembolso.status).toBe(201);
+    expect(reembolso.body.data).toMatchObject({ tipo: 'REEMBOLSO', montoReembolso: 15, stockRestante: 0 });
+
+    const excedido = await request(app).post(`/api/ventas/${idVenta}/devoluciones`).set(authorize).send({
+      claveIdempotencia: `dev-3-${suffix}`,
+      idProducto: productD,
+      cantidad: 2,
+      observacion: 'Pantalla rota',
+    });
+    expect(excedido.status).toBe(422);
+    expect(excedido.body.error.details).toMatchObject({ reason: 'RETURN_QUANTITY_EXCEEDED', disponible: 1 });
+
+    const anular = await request(app)
+      .post(`/api/ventas/${idVenta}/anular`)
+      .set(authorize)
+      .send({ claveIdempotencia: `anul-dev-${suffix}`, observacion: 'Error al registrar' });
+    expect(anular.status).toBe(422);
+    expect(anular.body.error.details.reason).toBe('SALE_HAS_RETURNS');
+
+    const venta = await request(app).get(`/api/ventas/${idVenta}`).set(authorize);
+    expect(venta.body.data.devoluciones.map((d) => d.tipo)).toEqual(['CAMBIO', 'REEMBOLSO']);
+    expect(venta.body.data.reembolsado).toBe(15);
+
+    const stock = await query(
+      'SELECT stock_actual FROM electronica_az.existencia WHERE id_producto = $1',
+      [productD],
+    );
+    expect(Number(stock.rows[0].stock_actual)).toBe(0);
   });
 });

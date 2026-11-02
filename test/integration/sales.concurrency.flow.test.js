@@ -74,6 +74,22 @@ const seedProductWithStock = async (token, label, stock, costo = 4, precio = 10)
   return productId;
 };
 
+// CU-16 antes de CU-15: el pago se registra y confirma con la venta en BORRADOR.
+const payAndConfirm = async (authorize, idVenta, monto, key, extra = {}) => {
+  const pay = await request(app).post(`/api/ventas/${idVenta}/pagos`).set(authorize).send({
+    monto,
+    metodo: 'EFECTIVO',
+    ...extra,
+  });
+  expect(pay.status).toBe(201);
+  const confirmed = await request(app)
+    .post(`/api/pagos/${pay.body.data.idPago}/confirmar`)
+    .set(authorize)
+    .send({ claveIdempotencia: key });
+  expect(confirmed.status).toBe(200);
+  return pay.body.data;
+};
+
 describe('sales concurrency with PostgreSQL', () => {
   let adminToken;
   let vendedorToken;
@@ -114,6 +130,8 @@ describe('sales concurrency with PostgreSQL', () => {
     });
     expect(draftA.status).toBe(201);
     expect(draftB.status).toBe(201);
+    await payAndConfirm(authorize, draftA.body.data.idVenta, 10, `conc-pay-sale-a-${suffix}`);
+    await payAndConfirm(authorize, draftB.body.data.idVenta, 10, `conc-pay-sale-b-${suffix}`);
 
     const [resA, resB] = await Promise.all([
       request(app)
@@ -149,13 +167,7 @@ describe('sales concurrency with PostgreSQL', () => {
     });
     expect(draft.status).toBe(201);
     const saleId = draft.body.data.idVenta;
-
-    const confirm = await request(app)
-      .post(`/api/ventas/${saleId}/confirmar`)
-      .set(authorize)
-      .send({ claveIdempotencia: `conc-sale-${suffix}` });
-    expect(confirm.status).toBe(200);
-    expect(confirm.body.data.total).toBe(20);
+    expect(draft.body.data.total).toBe(20);
 
     const payA = await request(app).post(`/api/ventas/${saleId}/pagos`).set(authorize).send({
       monto: 15,

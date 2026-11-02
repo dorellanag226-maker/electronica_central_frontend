@@ -3,6 +3,7 @@ import { errorCodes } from '../config/errorCodes.js';
 import {
   OPERACION_ANULAR,
   OPERACION_CONFIRMAR,
+  OPERACION_DEVOLUCION,
   OPERACION_ENTREGA,
   anularSale,
   confirmSale,
@@ -13,9 +14,11 @@ import {
   getProductsForSale,
   getSaleById,
   listSales,
+  registerDefectReturn,
   replaceSale,
   saveIdempotencyRecord,
 } from '../repositories/saleRepository.js';
+import { addLog } from '../repositories/securityRepository.js';
 import { AppError } from '../utils/AppError.js';
 import { assertQuantityFraction } from './inventoryHelpers.js';
 import { roundHalfUp2 } from './saleHelpers.js';
@@ -100,11 +103,28 @@ const computeTotals = (detalles, pagos = []) => {
   return { total, cobrado, saldo: roundHalfUp2(total - cobrado) };
 };
 
+const mapReturn = (row) => ({
+  idDevolucion: row.id_devolucion,
+  fechaHora: row.fecha_hora,
+  tipo: row.tipo,
+  idProducto: row.id_producto,
+  cantidad: Number(row.cantidad),
+  montoReembolso: Number(row.monto_reembolso),
+  observacion: row.observacion,
+});
+
+// La bitacora es auxiliar: si falla el registro, la operacion de venta no cambia.
+const logSaleEvent = (accion, objeto, usuario) => (
+  addLog(accion, objeto, 'OK', usuario.id, null).catch(() => undefined)
+);
+
 const mapSale = (row, usuario) => {
   const includeCost = canSeeCost(usuario);
   const detalles = (row.detalles ?? []).map((d) => mapDetail(d, includeCost));
   const pagos = (row.pagos ?? []).map(mapPayment);
+  const devoluciones = (row.devoluciones ?? []).map(mapReturn);
   const totals = computeTotals(row.detalles ?? [], row.pagos ?? []);
+  const reembolsado = roundHalfUp2(devoluciones.reduce((acc, d) => acc + d.montoReembolso, 0));
   return {
     idVenta: row.id_venta,
     fechaHora: row.fecha_hora,
@@ -117,6 +137,9 @@ const mapSale = (row, usuario) => {
     total: totals.total,
     cobrado: totals.cobrado,
     saldo: totals.saldo,
+    devoluciones,
+    reembolsado,
+    observacionAnulacion: row.observacion_anulacion ?? null,
     comprobante: row.comprobante
       ? { numero: row.comprobante.numero, fechaEmision: row.comprobante.fecha_emision }
       : null,
@@ -203,6 +226,12 @@ export const updateSaleService = async (id, body, usuario) => {
   const detalles = await validateSaleLines(body.idCliente, body.detalles);
   const result = await replaceSale(id, body.idCliente, detalles);
   if (result.status === 'NOT_FOUND') throw new AppError(errorCodes.NOT_FOUND);
+  if (result.status === 'HAS_PAYMENTS') {
+    throw new AppError(errorCodes.BUSINESS_RULE, 422, {
+      reason: 'SALE_HAS_PAYMENTS',
+      mensaje: 'La venta ya tiene pagos registrados; rechace los pendientes antes de modificarla.',
+    });
+  }
   if (result.status === 'INVALID_STATE') {
     throw new AppError(errorCodes.BUSINESS_RULE, 422, {
       reason: 'SALE_NOT_DRAFT',
@@ -224,6 +253,15 @@ export const confirmSaleService = async (id, body, usuario) => {
     throw new AppError(errorCodes.BUSINESS_RULE, 422, {
       reason: 'SALE_NOT_DRAFT',
       estado: result.estado,
+    });
+  }
+  if (result.status === 'BALANCE_NOT_ZERO') {
+    throw new AppError(errorCodes.BUSINESS_RULE, 422, {
+      reason: 'SALE_BALANCE_NOT_ZERO',
+      mensaje: 'El pago no cubre el total de la venta.',
+      total: result.total,
+      cobrado: result.cobrado,
+      saldo: result.saldo,
     });
   }
   if (result.status === 'INSUFFICIENT_STOCK') {
@@ -256,7 +294,7 @@ export const anularSaleService = async (id, body, usuario) => {
   const idem = await resolveIdempotency(usuario.id, OPERACION_ANULAR, body.claveIdempotencia, payload);
   if (idem.hit) return { cached: true, statusHttp: idem.statusHttp, data: idem.respuesta };
 
-  const result = await anularSale(id, usuario.id);
+  const result = await anularSale(id, usuario.id, body.observacion);
   if (result.status === 'NOT_FOUND') throw new AppError(errorCodes.NOT_FOUND);
   if (result.status === 'INVALID_STATE') {
     throw new AppError(errorCodes.BUSINESS_RULE, 422, {
@@ -264,10 +302,21 @@ export const anularSaleService = async (id, body, usuario) => {
       estado: result.estado,
     });
   }
-  if (result.status === 'HAS_CONFIRMED_PAYMENTS') {
-    throw new AppError(errorCodes.BUSINESS_RULE, 422, { reason: 'SALE_HAS_CONFIRMED_PAYMENTS' });
+  if (result.status === 'HAS_RETURNS') {
+    throw new AppError(errorCodes.BUSINESS_RULE, 422, {
+      reason: 'SALE_HAS_RETURNS',
+      mensaje: 'La venta tiene devoluciones por defecto registradas y ya no se puede anular.',
+    });
+  }
+  if (result.status === 'MISSING_EXISTENCE') {
+    throw new AppError(errorCodes.BUSINESS_RULE, 422, { reason: 'MISSING_EXISTENCE', idProducto: result.idProducto });
   }
 
+  await logSaleEvent(
+    'VENTA_ANULADA',
+    `Venta ${id}: error de registro (${body.observacion}); devuelto ${result.montoDevuelto}`,
+    usuario,
+  );
   const full = await getSaleById(id);
   const data = mapSale(full, usuario);
   const raced = await persistIdempotency(
@@ -343,3 +392,60 @@ export const deliverSaleService = async (id, body, usuario) => {
 };
 
 export { assertUniqueProductLines, computeTotals, canAnularAny };
+
+const returnErrors = {
+  NOT_FOUND: () => new AppError(errorCodes.NOT_FOUND),
+  INVALID_STATE: (r) => new AppError(errorCodes.BUSINESS_RULE, 422, {
+    reason: 'SALE_NOT_CONFIRMADA',
+    estado: r.estado,
+    mensaje: 'Solo se registran devoluciones de ventas confirmadas.',
+  }),
+  PRODUCT_NOT_IN_SALE: () => new AppError(errorCodes.BUSINESS_RULE, 422, {
+    reason: 'PRODUCT_NOT_IN_SALE',
+    mensaje: 'El producto no forma parte de esta venta.',
+  }),
+  FRACTION_NOT_ALLOWED: () => new AppError(errorCodes.BUSINESS_RULE, 422, {
+    reason: 'FRACTION_NOT_ALLOWED',
+    mensaje: 'La unidad de medida del producto no admite cantidades fraccionarias.',
+  }),
+  QUANTITY_EXCEEDED: (r) => new AppError(errorCodes.BUSINESS_RULE, 422, {
+    reason: 'RETURN_QUANTITY_EXCEEDED',
+    disponible: r.disponible,
+    mensaje: 'La cantidad supera lo vendido que aún no fue reembolsado.',
+  }),
+  MISSING_EXISTENCE: () => new AppError(errorCodes.BUSINESS_RULE, 422, { reason: 'MISSING_EXISTENCE' }),
+};
+
+// CU-15: producto fallado. El sistema decide segun el stock: CAMBIO por otro igual si alcanza,
+// si no REEMBOLSO de cantidad x precio de venta. El arrepentimiento del cliente no es motivo valido.
+export const registerDefectReturnService = async (id, body, usuario) => {
+  const payload = { idVenta: id, idProducto: body.idProducto, cantidad: body.cantidad };
+  const idem = await resolveIdempotency(usuario.id, OPERACION_DEVOLUCION, body.claveIdempotencia, payload);
+  if (idem.hit) return { cached: true, statusHttp: idem.statusHttp, data: idem.respuesta };
+
+  const result = await registerDefectReturn(id, body.idProducto, body.cantidad, body.observacion, usuario.id);
+  if (result.status !== 'OK') throw returnErrors[result.status](result);
+
+  const { devolucion } = result;
+  await logSaleEvent(
+    devolucion.tipo === 'CAMBIO' ? 'DEVOLUCION_CAMBIO' : 'DEVOLUCION_REEMBOLSO',
+    `Venta ${id}: ${Number(devolucion.cantidad)} u. de ${body.idProducto} (${body.observacion})`,
+    usuario,
+  );
+  const data = {
+    idDevolucion: devolucion.id_devolucion,
+    idVenta: id,
+    idProducto: body.idProducto,
+    tipo: devolucion.tipo,
+    cantidad: Number(devolucion.cantidad),
+    montoReembolso: Number(devolucion.monto_reembolso),
+    observacion: devolucion.observacion,
+    fechaHora: devolucion.fecha_hora,
+    stockRestante: result.stockRestante,
+  };
+  const raced = await persistIdempotency(
+    usuario.id, OPERACION_DEVOLUCION, body.claveIdempotencia, idem.hash, 201, data,
+  );
+  if (raced) return raced;
+  return { cached: false, statusHttp: 201, data };
+};

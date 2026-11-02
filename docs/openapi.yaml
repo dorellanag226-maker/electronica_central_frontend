@@ -2063,7 +2063,7 @@ paths:
                         type: number
             example:
               idProveedor: "{{idProveedor}}"
-              fecha: 2026-11-02T02:11:34.056Z
+              fecha: 2026-11-02T06:55:03.787Z
               detalles:
                 - idProducto: "{{idProducto}}"
                   cantidad: 1
@@ -2163,7 +2163,7 @@ paths:
                         type: number
             example:
               idProveedor: "{{idProveedor}}"
-              fecha: 2026-11-02T02:11:34.057Z
+              fecha: 2026-11-02T06:55:03.789Z
               detalles:
                 - idProducto: "{{idProducto}}"
                   cantidad: 1
@@ -2494,7 +2494,7 @@ paths:
   /api/ventas/{id}/anular:
     post:
       operationId: anularVenta
-      summary: Anular venta
+      summary: Anular venta por error de registro (devuelve stock y pagos)
       tags:
         - Ventas
       parameters:
@@ -2530,11 +2530,77 @@ paths:
               type: object
               required:
                 - claveIdempotencia
+                - observacion
               properties:
                 claveIdempotencia:
                   type: string
+                observacion:
+                  type: string
+                  minLength: 5
+                  example: Se registró el producto equivocado
             example:
               claveIdempotencia: idem-{{$timestamp}}
+              observacion: Se registró el producto equivocado
+  /api/ventas/{id}/devoluciones:
+    post:
+      operationId: devolucionDefecto
+      summary: Devolución por producto fallado (cambio si hay stock, si no reembolso)
+      tags:
+        - Ventas
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+        "201":
+          description: Created
+        "400":
+          description: Validation error
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden
+        "404":
+          description: Not found
+        "422":
+          description: Business rule
+      security:
+        - bearerAuth: []
+      description: Requiere permiso `VENTAS_GESTIONAR` (o roles Admin/Dev según seed).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - claveIdempotencia
+                - idProducto
+                - cantidad
+                - observacion
+              properties:
+                claveIdempotencia:
+                  type: string
+                idProducto:
+                  type: string
+                  format: uuid
+                cantidad:
+                  type: number
+                  example: 1
+                observacion:
+                  type: string
+                  minLength: 5
+                  example: No enciende
+            example:
+              claveIdempotencia: idem-{{$timestamp}}
+              idProducto: "{{idProducto}}"
+              cantidad: 1
+              observacion: No enciende
   /api/ventas/{id}/comprobante:
     get:
       operationId: getComprobante
@@ -2703,6 +2769,84 @@ paths:
               monto: 1
               metodo: EFECTIVO
               referenciaExterna: ejemplo-referenciaExterna
+  /api/ventas/{id}/pagos/en-linea:
+    post:
+      operationId: createPagoEnLinea
+      summary: Generar cobro en línea (Stripe Checkout); devuelve urlPago
+      tags:
+        - Pagos
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+        "201":
+          description: Created
+        "400":
+          description: Validation error
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden
+        "404":
+          description: Not found
+        "422":
+          description: Business rule
+      security:
+        - bearerAuth: []
+      description: Requiere permiso `VENTAS_GESTIONAR` (o roles Admin/Dev según seed).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                monto:
+                  type: number
+                  description: Opcional; sin monto se cobra todo el saldo
+            example:
+              monto: 1
+  /api/pagos/webhook/stripe:
+    post:
+      operationId: stripeWebhook
+      summary: Webhook de Stripe (lo llama la pasarela; requiere cabecera
+        Stripe-Signature)
+      tags:
+        - Pagos
+      responses:
+        "200":
+          description: OK
+        "201":
+          description: Created
+        "400":
+          description: Validation error
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden
+        "404":
+          description: Not found
+        "422":
+          description: Business rule
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                type:
+                  type: string
+                  example: checkout.session.completed
+            example:
+              type: checkout.session.completed
   /api/pagos/{id}/confirmar:
     post:
       operationId: confirmPago

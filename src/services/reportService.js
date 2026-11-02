@@ -2,6 +2,7 @@ import ExcelJS from 'exceljs';
 import { errorCodes } from '../config/errorCodes.js';
 import {
   reportCogs,
+  reportDefectReturns,
   reportDemandRequestsQty,
   reportDemandSalesQty,
   reportGanancias,
@@ -26,6 +27,7 @@ export const getVentasReportService = async ({ desde, hasta, idUsuario, estado }
   const items = rows.map((row) => {
     const totalBruto = roundHalfUp2(row.total_bruto);
     const cobrado = roundHalfUp2(row.cobrado);
+    const reembolsado = roundHalfUp2(row.reembolsado ?? 0);
     return {
       idVenta: row.id_venta,
       fechaHora: row.fecha_hora,
@@ -35,6 +37,7 @@ export const getVentasReportService = async ({ desde, hasta, idUsuario, estado }
       total: totalBruto,
       cobrado,
       saldo: roundHalfUp2(totalBruto - cobrado),
+      reembolsado,
     };
   });
   const vendido = roundHalfUp2(
@@ -43,9 +46,17 @@ export const getVentasReportService = async ({ desde, hasta, idUsuario, estado }
   const cobradoTotal = roundHalfUp2(
     items.filter((i) => i.estado !== 'ANULADA').reduce((a, i) => a + i.cobrado, 0),
   );
+  // Los pagos de ventas anuladas quedan ANULADO y ya no suman en `cobrado`.
+  const reembolsado = roundHalfUp2(items.reduce((a, i) => a + i.reembolsado, 0));
   return {
     periodo: { desde, hasta, zona: 'America/La_Paz' },
-    resumen: { vendido, cobrado: cobradoTotal, excluyeAnuladasDeVendido: true },
+    resumen: {
+      vendido,
+      cobrado: cobradoTotal,
+      reembolsado,
+      cobradoNeto: roundHalfUp2(cobradoTotal - reembolsado),
+      excluyeAnuladasDeVendido: true,
+    },
     items,
   };
 };
@@ -64,10 +75,27 @@ export const getGananciasReportService = async ({ desde, hasta }) => {
     gananciaLinea: roundHalfUp2(row.ganancia_linea),
   }));
   const gananciaBruta = roundHalfUp2(items.reduce((a, i) => a + i.gananciaLinea, 0));
+  const devoluciones = (await reportDefectReturns(start, endExclusive)).map((row) => ({
+    idDevolucion: row.id_devolucion,
+    idVenta: row.id_venta,
+    fechaHora: row.fecha_hora,
+    tipo: row.tipo,
+    codigo: row.codigo,
+    nombre: row.nombre,
+    cantidad: Number(row.cantidad),
+    montoReembolso: Number(row.monto_reembolso),
+    perdida: roundHalfUp2(row.perdida),
+  }));
+  const perdidasPorDefecto = roundHalfUp2(devoluciones.reduce((a, d) => a + d.perdida, 0));
   return {
     periodo: { desde, hasta, zona: 'America/La_Paz' },
-    resumen: { gananciaBruta },
+    resumen: {
+      gananciaBruta,
+      perdidasPorDefecto,
+      gananciaNeta: roundHalfUp2(gananciaBruta - perdidasPorDefecto),
+    },
     items,
+    devoluciones,
   };
 };
 

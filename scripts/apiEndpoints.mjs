@@ -545,9 +545,30 @@ export const endpoints = [
     body: { type: 'object', required: ['claveIdempotencia'], properties: { claveIdempotencia: { type: 'string' } } },
   },
   {
-    method: 'post', path: '/api/ventas/{id}/anular', operationId: 'anularVenta', summary: 'Anular venta', tags: ['Ventas'], auth: 'VENTAS_GESTIONAR',
+    method: 'post', path: '/api/ventas/{id}/anular', operationId: 'anularVenta', summary: 'Anular venta por error de registro (devuelve stock y pagos)', tags: ['Ventas'], auth: 'VENTAS_GESTIONAR',
     pathParams: ['id'],
-    body: { type: 'object', required: ['claveIdempotencia'], properties: { claveIdempotencia: { type: 'string' } } },
+    body: {
+      type: 'object',
+      required: ['claveIdempotencia', 'observacion'],
+      properties: {
+        claveIdempotencia: { type: 'string' },
+        observacion: { type: 'string', minLength: 5, example: 'Se registró el producto equivocado' },
+      },
+    },
+  },
+  {
+    method: 'post', path: '/api/ventas/{id}/devoluciones', operationId: 'devolucionDefecto', summary: 'Devolución por producto fallado (cambio si hay stock, si no reembolso)', tags: ['Ventas'], auth: 'VENTAS_GESTIONAR',
+    pathParams: ['id'],
+    body: {
+      type: 'object',
+      required: ['claveIdempotencia', 'idProducto', 'cantidad', 'observacion'],
+      properties: {
+        claveIdempotencia: { type: 'string' },
+        idProducto: { type: 'string', format: 'uuid' },
+        cantidad: { type: 'number', example: 1 },
+        observacion: { type: 'string', minLength: 5, example: 'No enciende' },
+      },
+    },
   },
   {
     method: 'get', path: '/api/ventas/{id}/comprobante', operationId: 'getComprobante', summary: 'Comprobante JSON/PDF', tags: ['Ventas'], auth: 'VENTAS_GESTIONAR',
@@ -562,6 +583,18 @@ export const endpoints = [
   {
     method: 'get', path: '/api/ventas/{id}/pagos', operationId: 'listPagosVenta', summary: 'Listar pagos de venta', tags: ['Pagos'], auth: 'VENTAS_GESTIONAR',
     pathParams: ['id'],
+  },
+  {
+    method: 'post', path: '/api/ventas/{id}/pagos/en-linea', operationId: 'createPagoEnLinea', summary: 'Generar cobro en línea (Stripe Checkout); devuelve urlPago', tags: ['Pagos'], auth: 'VENTAS_GESTIONAR',
+    pathParams: ['id'],
+    body: {
+      type: 'object',
+      properties: { monto: { type: 'number', description: 'Opcional; sin monto se cobra todo el saldo' } },
+    },
+  },
+  {
+    method: 'post', path: '/api/pagos/webhook/stripe', operationId: 'stripeWebhook', summary: 'Webhook de Stripe (lo llama la pasarela; requiere cabecera Stripe-Signature)', tags: ['Pagos'], auth: false,
+    body: { type: 'object', properties: { type: { type: 'string', example: 'checkout.session.completed' } } },
   },
   {
     method: 'post', path: '/api/ventas/{id}/pagos', operationId: 'createPago', summary: 'Registrar pago', tags: ['Pagos'], auth: 'VENTAS_GESTIONAR',

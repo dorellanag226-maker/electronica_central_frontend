@@ -12,7 +12,11 @@ export const reportSales = async (start, endExclusive, idUsuarioVendedor, estado
       coalesce((
         SELECT sum(p.monto) FROM electronica_az.pago p
         WHERE p.id_venta = v.id_venta AND p.estado = 'CONFIRMADO'
-      ), 0)::numeric AS cobrado
+      ), 0)::numeric AS cobrado,
+      coalesce((
+        SELECT sum(dv.monto_reembolso) FROM electronica_az.devolucion dv
+        WHERE dv.id_venta = v.id_venta
+      ), 0)::numeric AS reembolsado
     FROM electronica_az.venta v
     JOIN electronica_az.usuario u ON u.id_usuario = v.id_usuario
     JOIN electronica_az.cliente c ON c.id_cliente = v.id_cliente
@@ -67,13 +71,23 @@ export const reportInventorySnapshot = async (cutExclusive) => {
   return result.rows;
 };
 
+// Costo de lo que salio del inventario: lo vendido mas las unidades de reemplazo entregadas en cambios.
 export const reportCogs = async (start, endExclusive) => {
   const result = await query(`
-    SELECT coalesce(sum(d.cantidad * d.costo_unitario_historico), 0)::numeric AS cogs
-    FROM electronica_az.detalle_venta d
-    JOIN electronica_az.venta v ON v.id_venta = d.id_venta
-    WHERE v.estado = 'CONFIRMADA'
-      AND v.fecha_hora >= $1 AND v.fecha_hora < $2
+    SELECT (
+      coalesce((
+        SELECT sum(d.cantidad * d.costo_unitario_historico)
+        FROM electronica_az.detalle_venta d
+        JOIN electronica_az.venta v ON v.id_venta = d.id_venta
+        WHERE v.estado = 'CONFIRMADA'
+          AND v.fecha_hora >= $1 AND v.fecha_hora < $2
+      ), 0)
+      + coalesce((
+        SELECT sum(dv.cantidad * dv.costo_unitario)
+        FROM electronica_az.devolucion dv
+        WHERE dv.tipo = 'CAMBIO' AND dv.fecha_hora >= $1 AND dv.fecha_hora < $2
+      ), 0)
+    )::numeric AS cogs
   `, [start, endExclusive]);
   return Number(result.rows[0].cogs);
 };
@@ -112,4 +126,22 @@ export const reportDemandRequestsQty = async (start, endExclusive) => {
     WHERE fecha_hora >= $1 AND fecha_hora < $2
   `, [start, endExclusive]);
   return Number(result.rows[0].unidades);
+};
+
+// Devoluciones por defecto del periodo (por fecha de la devolucion). La perdida de un CAMBIO es el
+// costo de la unidad de reemplazo; la de un REEMBOLSO, el dinero devuelto (la unidad fallada ya
+// estaba contada como costo de la venta y no vuelve al stock).
+export const reportDefectReturns = async (start, endExclusive) => {
+  const result = await query(`
+    SELECT dv.id_devolucion, dv.fecha_hora, dv.tipo, dv.cantidad, dv.monto_reembolso, dv.costo_unitario,
+      dv.id_venta, p.codigo, p.nombre,
+      (CASE WHEN dv.tipo = 'CAMBIO' THEN dv.cantidad * dv.costo_unitario ELSE dv.monto_reembolso END)::numeric
+        AS perdida
+    FROM electronica_az.devolucion dv
+    JOIN electronica_az.detalle_venta d ON d.id_detalle_venta = dv.id_detalle_venta
+    JOIN electronica_az.producto p ON p.id_producto = d.id_producto
+    WHERE dv.fecha_hora >= $1 AND dv.fecha_hora < $2
+    ORDER BY dv.fecha_hora ASC
+  `, [start, endExclusive]);
+  return result.rows;
 };

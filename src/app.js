@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import { env } from './config/env.js';
+import { stripeWebhookController } from './controllers/paymentController.js';
 import healthRouter from './routes/healthRoutes.js';
 import authRouter from './routes/authRoutes.js';
 import catalogRouter from './routes/catalogRoutes.js';
@@ -19,6 +20,8 @@ export const createApp = () => {
   const app = express();
 
   app.use(cors({ origin: env.CORS_ORIGIN.split(',').map((origen) => origen.trim()) }));
+  // Antes de express.json(): la firma de Stripe se verifica sobre el cuerpo crudo de la peticion.
+  app.post('/api/pagos/webhook/stripe', express.raw({ type: 'application/json' }), stripeWebhookController);
   app.use(express.json());
   app.use(healthRouter);
   app.use('/api/docs', createDocsRouter());

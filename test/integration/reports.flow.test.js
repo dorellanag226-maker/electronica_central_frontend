@@ -124,6 +124,17 @@ describe('reports flow with PostgreSQL', () => {
     expect(draft.status).toBe(201);
     saleId = draft.body.data.idVenta;
 
+    const pay = await request(app).post(`/api/ventas/${saleId}/pagos`).set(authorize).send({
+      monto: 20,
+      metodo: 'EFECTIVO',
+    });
+    expect(pay.status).toBe(201);
+    const payConfirm = await request(app)
+      .post(`/api/pagos/${pay.body.data.idPago}/confirmar`)
+      .set(authorize)
+      .send({ claveIdempotencia: `rep-pay-${suffix}` });
+    expect(payConfirm.status).toBe(200);
+
     const confirm = await request(app)
       .post(`/api/ventas/${saleId}/confirmar`)
       .set(authorize)
