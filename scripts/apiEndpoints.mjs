@@ -269,7 +269,23 @@ export const endpoints = [
       },
     },
   },
-  { method: 'get', path: '/api/bitacora', operationId: 'listBitacora', summary: 'Consultar bitácora', tags: ['Seguridad'], auth: 'BITACORA_CONSULTAR' },
+  {
+    method: 'get', path: '/api/bitacora', operationId: 'listBitacora', summary: 'Consultar bitácora (filtros y paginación)', tags: ['Seguridad'], auth: 'BITACORA_CONSULTAR',
+    query: {
+      desde: { type: 'string', format: 'date' },
+      hasta: { type: 'string', format: 'date' },
+      idUsuario: { type: 'string', format: 'uuid' },
+      accion: { type: 'string' },
+      resultado: { type: 'string' },
+      pagina: { type: 'integer', default: 1 },
+      limite: { type: 'integer', default: 100 },
+    },
+  },
+  { method: 'get', path: '/api/bitacora/filtros', operationId: 'listBitacoraFiltros', summary: 'Acciones y resultados para los filtros de bitácora', tags: ['Seguridad'], auth: 'BITACORA_CONSULTAR' },
+  {
+    method: 'get', path: '/api/bitacora/{id}', operationId: 'getBitacora', summary: 'Detalle de un registro de bitácora', tags: ['Seguridad'], auth: 'BITACORA_CONSULTAR',
+    pathParams: ['id'],
+  },
 
   // Inventario
   {

@@ -1000,8 +1000,58 @@
                 "value": "application/json"
               }
             ],
-            "url": "{{baseUrl}}/api/bitacora",
-            "description": "Consultar bitácora | permiso: BITACORA_CONSULTAR",
+            "url": "{{baseUrl}}/api/bitacora?pagina=1&limite=100",
+            "description": "Consultar bitácora (filtros y paginación) | permiso: BITACORA_CONSULTAR",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/bitacora/filtros",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/bitacora/filtros",
+            "description": "Acciones y resultados para los filtros de bitácora | permiso: BITACORA_CONSULTAR",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/bitacora/{id}",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/bitacora/{{id}}",
+            "description": "Detalle de un registro de bitácora | permiso: BITACORA_CONSULTAR",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -1472,7 +1522,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"idProveedor\": \"{{idProveedor}}\",\n  \"fecha\": \"2026-11-02T01:48:20.986Z\",\n  \"detalles\": [\n    {\n      \"idProducto\": \"{{idProducto}}\",\n      \"cantidad\": 1,\n      \"costoUnitario\": 1\n    }\n  ]\n}",
+              "raw": "{\n  \"idProveedor\": \"{{idProveedor}}\",\n  \"fecha\": \"2026-11-02T02:11:34.094Z\",\n  \"detalles\": [\n    {\n      \"idProducto\": \"{{idProducto}}\",\n      \"cantidad\": 1,\n      \"costoUnitario\": 1\n    }\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1531,7 +1581,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"idProveedor\": \"{{idProveedor}}\",\n  \"fecha\": \"2026-11-02T01:48:20.986Z\",\n  \"detalles\": [\n    {\n      \"idProducto\": \"{{idProducto}}\",\n      \"cantidad\": 1,\n      \"costoUnitario\": 1\n    }\n  ]\n}",
+              "raw": "{\n  \"idProveedor\": \"{{idProveedor}}\",\n  \"fecha\": \"2026-11-02T02:11:34.094Z\",\n  \"detalles\": [\n    {\n      \"idProducto\": \"{{idProducto}}\",\n      \"cantidad\": 1,\n      \"costoUnitario\": 1\n    }\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"

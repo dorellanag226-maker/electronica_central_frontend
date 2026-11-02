@@ -3,7 +3,9 @@ import {
   createClientService,
   createRoleService,
   createUserService,
+  getLogService,
   listClientsService,
+  listLogFiltersService,
   listLogsService,
   listPermissionsService,
   listRolesService,
@@ -89,4 +91,14 @@ export const updateRoleController = wrap((req) => updateRoleService(
   req.ip,
 ));
 
-export const listLogsController = wrap(() => listLogsService());
+// `data` sigue siendo el arreglo de registros; la paginacion viaja en `meta`.
+export const listLogsController = async (req, res) => {
+  try {
+    const { items, meta } = await listLogsService(req.validated.query);
+    return res.status(200).json({ data: items, meta });
+  } catch (error) {
+    return sendError(res, error);
+  }
+};
+export const getLogController = wrap((req) => getLogService(req.validated.params.id));
+export const listLogFiltersController = wrap(() => listLogFiltersService());

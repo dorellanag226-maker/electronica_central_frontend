@@ -219,13 +219,41 @@ export const addLog = async (action, object, result, userId, ip = null) => query
   [action, object, result, userId ?? null, ip],
 );
 
-export const listLogs = async () => (
+const logColumns = `
+  b.id_registro, b.fecha_hora, b.accion, b.objeto_afectado, b.resultado,
+  host(b.direccion_ip) AS direccion_ip, b.id_usuario, u.nombre_usuario
+`;
+const logFrom = `
+  FROM electronica_az.registro_bitacora b
+  LEFT JOIN electronica_az.usuario u ON u.id_usuario = b.id_usuario
+`;
+
+// `inicio`/`finExclusivo` ya vienen convertidos a instantes UTC; cualquier filtro en null se ignora.
+export const listLogs = async ({ inicio, finExclusivo, idUsuario, accion, resultado }, limite, desplazamiento) => (
   await query(
-    `SELECT b.id_registro, b.fecha_hora, b.accion, b.objeto_afectado, b.resultado,
-       host(b.direccion_ip) AS direccion_ip, u.nombre_usuario
-     FROM electronica_az.registro_bitacora b
-     LEFT JOIN electronica_az.usuario u ON u.id_usuario = b.id_usuario
-     ORDER BY b.fecha_hora DESC
-     LIMIT 1000`,
+    `SELECT ${logColumns}, count(*) OVER() AS total
+     ${logFrom}
+     WHERE ($1::timestamptz IS NULL OR b.fecha_hora >= $1)
+       AND ($2::timestamptz IS NULL OR b.fecha_hora < $2)
+       AND ($3::uuid IS NULL OR b.id_usuario = $3)
+       AND ($4::text IS NULL OR b.accion = $4)
+       AND ($5::text IS NULL OR b.resultado = $5)
+     ORDER BY b.fecha_hora DESC, b.id_registro
+     LIMIT $6 OFFSET $7`,
+    [inicio, finExclusivo, idUsuario, accion, resultado, limite, desplazamiento],
+  )
+).rows;
+
+export const logById = async (idRegistro) => (
+  await query(`SELECT ${logColumns} ${logFrom} WHERE b.id_registro = $1`, [idRegistro])
+).rows[0];
+
+// Acciones y resultados distintos registrados, para llenar los selectores de filtro del panel.
+export const listLogFilterValues = async () => (
+  await query(
+    `SELECT 'ACCION' AS tipo, accion AS valor FROM electronica_az.registro_bitacora GROUP BY accion
+     UNION ALL
+     SELECT 'RESULTADO', resultado FROM electronica_az.registro_bitacora GROUP BY resultado
+     ORDER BY tipo, valor`,
   )
 ).rows;

@@ -4,7 +4,9 @@ import {
   createClientController,
   createRoleController,
   createUserController,
+  getLogController,
   listClientsController,
+  listLogFiltersController,
   listLogsController,
   listPermissionsController,
   listRolesController,
@@ -19,6 +21,8 @@ import {
   assignRoleDto,
   createClientDto,
   createUserDto,
+  listLogDto,
+  logIdDto,
   resetUserDto,
   roleDto,
   roleIdDto,
@@ -29,7 +33,7 @@ import {
 } from '../dto/security.dto.js';
 import { authenticate } from '../middlewares/authMiddleware.js';
 import { requireAnyPermission, requirePermissions } from '../middlewares/authorizationMiddleware.js';
-import { validateBody, validateParams } from '../middlewares/validateDto.js';
+import { validateBody, validateParams, validateQuery } from '../middlewares/validateDto.js';
 
 const securityRouter = Router();
 securityRouter.use(authenticate);
@@ -94,6 +98,10 @@ securityRouter.post(
   validateBody(createClientDto),
   createClientController,
 );
-securityRouter.get('/bitacora', requirePermissions('BITACORA_CONSULTAR'), listLogsController);
+const consultLogs = requirePermissions('BITACORA_CONSULTAR');
+securityRouter.get('/bitacora', consultLogs, validateQuery(listLogDto), listLogsController);
+// Antes de `/bitacora/:id` para que "filtros" no se interprete como un id.
+securityRouter.get('/bitacora/filtros', consultLogs, listLogFiltersController);
+securityRouter.get('/bitacora/:id', consultLogs, validateParams(logIdDto), getLogController);
 
 export default securityRouter;

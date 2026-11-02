@@ -14,7 +14,9 @@ import {
   findRolesByIds,
   findRolesByNames,
   listClients,
+  listLogFilterValues,
   listLogs,
+  logById,
   listPermissions,
   listRoles,
   listUsers,
@@ -39,6 +41,7 @@ import {
   notFound,
 } from '../utils/errors.js';
 import { hashPassword } from '../utils/password.js';
+import { laPazDayStartUtc } from './reportHelpers.js';
 
 const ADMIN = 'ADMINISTRADOR';
 const DEVELOPER = 'DESARROLLADOR';
@@ -292,4 +295,38 @@ export const updateRoleService = async (id, data, actor, ip) => {
   return roleRowById(id);
 };
 
-export const listLogsService = listLogs;
+// ---------- Bitacora (CU-3) ----------
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+export const listLogsService = async ({ desde, hasta, idUsuario, accion, resultado, pagina, limite }) => {
+  const filtros = {
+    inicio: desde ? laPazDayStartUtc(desde) : null,
+    finExclusivo: hasta ? new Date(laPazDayStartUtc(hasta).getTime() + DAY_MS) : null,
+    idUsuario: idUsuario ?? null,
+    accion: accion ?? null,
+    resultado: resultado ?? null,
+  };
+  const rows = await listLogs(filtros, limite, (pagina - 1) * limite);
+  const total = Number(rows[0]?.total ?? 0);
+  const items = rows.map((row) => {
+    const item = { ...row };
+    delete item.total;
+    return item;
+  });
+  return { items, meta: { pagina, limite, total } };
+};
+
+export const getLogService = async (idRegistro) => {
+  const log = await logById(idRegistro);
+  if (!log) throw notFound('El registro de bitácora no existe.');
+  return log;
+};
+
+export const listLogFiltersService = async () => {
+  const rows = await listLogFilterValues();
+  return {
+    acciones: rows.filter((row) => row.tipo === 'ACCION').map((row) => row.valor),
+    resultados: rows.filter((row) => row.tipo === 'RESULTADO').map((row) => row.valor),
+  };
+};

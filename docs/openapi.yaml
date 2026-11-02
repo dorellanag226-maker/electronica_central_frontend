@@ -1316,9 +1316,105 @@ paths:
   /api/bitacora:
     get:
       operationId: listBitacora
-      summary: Consultar bitácora
+      summary: Consultar bitácora (filtros y paginación)
       tags:
         - Seguridad
+      parameters:
+        - name: desde
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: hasta
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: idUsuario
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: accion
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: resultado
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: pagina
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+        - name: limite
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 100
+      responses:
+        "200":
+          description: OK
+        "201":
+          description: Created
+        "400":
+          description: Validation error
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden
+        "404":
+          description: Not found
+        "422":
+          description: Business rule
+      security:
+        - bearerAuth: []
+      description: Requiere permiso `BITACORA_CONSULTAR` (o roles Admin/Dev según seed).
+  /api/bitacora/filtros:
+    get:
+      operationId: listBitacoraFiltros
+      summary: Acciones y resultados para los filtros de bitácora
+      tags:
+        - Seguridad
+      responses:
+        "200":
+          description: OK
+        "201":
+          description: Created
+        "400":
+          description: Validation error
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden
+        "404":
+          description: Not found
+        "422":
+          description: Business rule
+      security:
+        - bearerAuth: []
+      description: Requiere permiso `BITACORA_CONSULTAR` (o roles Admin/Dev según seed).
+  /api/bitacora/{id}:
+    get:
+      operationId: getBitacora
+      summary: Detalle de un registro de bitácora
+      tags:
+        - Seguridad
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
       responses:
         "200":
           description: OK
@@ -1967,7 +2063,7 @@ paths:
                         type: number
             example:
               idProveedor: "{{idProveedor}}"
-              fecha: 2026-11-02T01:48:20.906Z
+              fecha: 2026-11-02T02:11:34.056Z
               detalles:
                 - idProducto: "{{idProducto}}"
                   cantidad: 1
@@ -2067,7 +2163,7 @@ paths:
                         type: number
             example:
               idProveedor: "{{idProveedor}}"
-              fecha: 2026-11-02T01:48:20.930Z
+              fecha: 2026-11-02T02:11:34.057Z
               detalles:
                 - idProducto: "{{idProducto}}"
                   cantidad: 1

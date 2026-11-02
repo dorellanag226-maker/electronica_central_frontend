@@ -63,4 +63,22 @@ export const roleDto = z.object({
   permisosIds: z.array(uuid),
 });
 
-export const listLogDto = z.object({});
+const dateDto = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+
+// CU-3: filtros por fecha (dias de La Paz, `hasta` inclusive), usuario, accion y resultado.
+export const listLogDto = z.object({
+  desde: dateDto.optional(),
+  hasta: dateDto.optional(),
+  idUsuario: uuid.optional(),
+  accion: z.string().trim().min(1).max(120).optional(),
+  resultado: z.string().trim().min(1).max(120).optional(),
+  pagina: z.coerce.number().int().positive().default(1),
+  limite: z.coerce.number().int().positive().max(1000).default(100),
+}).refine((data) => !data.desde || !data.hasta || data.desde <= data.hasta, {
+  message: 'La fecha inicial no puede ser posterior a la final',
+  path: ['desde'],
+});
+
+export const logIdDto = z.object({
+  id: uuid,
+});
