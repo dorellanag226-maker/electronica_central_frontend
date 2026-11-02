@@ -19,3 +19,17 @@ export const changePasswordAuthDto = z.object({
   contrasenaActual: z.string().min(1).max(128),
   contrasenaNueva: password,
 });
+
+export const requestPasswordResetDto = z.object({
+  correo: z.string().trim().email().max(254),
+});
+
+// CU-22: la nueva contrasena se ingresa dos veces.
+export const resetPasswordDto = z.object({
+  token: z.string().trim().min(20).max(200),
+  contrasenaNueva: password,
+  confirmacionContrasena: z.string().max(128),
+}).refine((data) => data.contrasenaNueva === data.confirmacionContrasena, {
+  message: 'Las contraseñas no coinciden',
+  path: ['confirmacionContrasena'],
+});

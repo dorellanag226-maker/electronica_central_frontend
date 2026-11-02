@@ -90,6 +90,88 @@ export const updatePassword = (userId, hash) => query(
   [hash, userId],
 );
 
+// Al cambiar la contrasena se cierran las demas sesiones; la sesion que hizo el cambio sigue activa.
+export const revokeOtherSessions = (userId, currentTokenHash) => query(
+  `UPDATE electronica_az.sesion_usuario
+   SET revocada_en = CURRENT_TIMESTAMP
+   WHERE id_usuario = $1 AND token_hash <> $2 AND revocada_en IS NULL`,
+  [userId, currentTokenHash],
+);
+
+export const findActiveUserByEmail = async (correo) => (
+  await query(
+    `SELECT id_usuario, nombre_usuario, correo
+     FROM electronica_az.usuario
+     WHERE lower(correo) = lower($1) AND activo`,
+    [correo],
+  )
+).rows[0];
+
+// Invalida los enlaces anteriores del usuario y crea uno nuevo. Devuelve null si ya se genero
+// uno hace menos de `cooldownSeconds` (evita usar el endpoint para inundar el correo).
+export const createPasswordResetToken = (userId, tokenHash, ttlSeconds, cooldownSeconds) => (
+  withTransaction(async (client) => {
+    // Bloquea la fila del usuario para que dos solicitudes simultaneas no generen dos enlaces.
+    await client.query('SELECT 1 FROM electronica_az.usuario WHERE id_usuario = $1 FOR UPDATE', [userId]);
+    const recent = await client.query(
+      `SELECT 1 FROM electronica_az.token_recuperacion
+       WHERE id_usuario = $1 AND creado_en > CURRENT_TIMESTAMP - make_interval(secs => $2)`,
+      [userId, cooldownSeconds],
+    );
+    if (recent.rowCount > 0) return null;
+
+    await client.query(
+      `UPDATE electronica_az.token_recuperacion
+       SET usado_en = CURRENT_TIMESTAMP
+       WHERE id_usuario = $1 AND usado_en IS NULL`,
+      [userId],
+    );
+    return (
+      await client.query(
+        `INSERT INTO electronica_az.token_recuperacion(hash_token, expira_en, id_usuario)
+         VALUES ($1, CURRENT_TIMESTAMP + make_interval(secs => $2), $3)
+         RETURNING id_token, expira_en`,
+        [tokenHash, ttlSeconds, userId],
+      )
+    ).rows[0];
+  })
+);
+
+// Canjea el enlace y guarda la nueva contrasena en una sola transaccion: el UPDATE condicional
+// garantiza que un mismo token solo se use una vez aunque lleguen dos solicitudes a la vez.
+export const resetPasswordWithToken = (tokenHash, passwordHash) => withTransaction(async (client) => {
+  const token = (
+    await client.query(
+      `UPDATE electronica_az.token_recuperacion t
+       SET usado_en = CURRENT_TIMESTAMP
+       FROM electronica_az.usuario u
+       WHERE t.hash_token = $1
+         AND t.usado_en IS NULL
+         AND t.expira_en > CURRENT_TIMESTAMP
+         AND u.id_usuario = t.id_usuario
+         AND u.activo
+       RETURNING u.id_usuario, u.nombre_usuario`,
+      [tokenHash],
+    )
+  ).rows[0];
+  if (!token) return null;
+
+  await client.query(
+    `UPDATE electronica_az.usuario
+     SET hash_contrasena = $1, cambio_contrasena_obligatorio = false,
+         intentos_fallidos = 0, bloqueado_hasta = NULL
+     WHERE id_usuario = $2`,
+    [passwordHash, token.id_usuario],
+  );
+  await client.query(
+    `UPDATE electronica_az.sesion_usuario
+     SET revocada_en = CURRENT_TIMESTAMP
+     WHERE id_usuario = $1 AND revocada_en IS NULL`,
+    [token.id_usuario],
+  );
+  return token;
+});
+
 export const setPasswordChangeRequired = (userId, required) => query(
   'UPDATE electronica_az.usuario SET cambio_contrasena_obligatorio = $1 WHERE id_usuario = $2',
   [required, userId],

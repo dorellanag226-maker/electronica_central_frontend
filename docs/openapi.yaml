@@ -245,6 +245,88 @@ paths:
             example:
               contrasenaActual: ClaveDePruebaSegura123
               contrasenaNueva: ClaveDePruebaSegura123
+  /api/auth/recuperar-contrasena:
+    post:
+      operationId: authRequestPasswordReset
+      summary: Solicitar enlace de recuperación de contraseña
+      tags:
+        - Auth
+      responses:
+        "200":
+          description: OK
+        "201":
+          description: Created
+        "400":
+          description: Validation error
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden
+        "404":
+          description: Not found
+        "422":
+          description: Business rule
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - correo
+              properties:
+                correo:
+                  type: string
+                  format: email
+            example:
+              correo: demo@example.test
+  /api/auth/restablecer-contrasena:
+    post:
+      operationId: authResetPassword
+      summary: Restablecer contraseña con el enlace recibido
+      tags:
+        - Auth
+      responses:
+        "200":
+          description: OK
+        "201":
+          description: Created
+        "400":
+          description: Validation error
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden
+        "404":
+          description: Not found
+        "422":
+          description: Business rule
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - token
+                - contrasenaNueva
+                - confirmacionContrasena
+              properties:
+                token:
+                  type: string
+                  example: "{{resetToken}}"
+                contrasenaNueva:
+                  type: string
+                  minLength: 8
+                confirmacionContrasena:
+                  type: string
+                  minLength: 8
+            example:
+              token: "{{resetToken}}"
+              contrasenaNueva: ClaveDePruebaSegura123
+              confirmacionContrasena: ejemplo-confirmacionContrasena
   /api/catalogo/productos:
     get:
       operationId: catalogPublicList
@@ -1620,7 +1702,7 @@ paths:
                         type: number
             example:
               idProveedor: "{{idProveedor}}"
-              fecha: 2026-09-25T21:41:59.996Z
+              fecha: 2026-11-01T23:40:19.477Z
               detalles:
                 - idProducto: "{{idProducto}}"
                   cantidad: 1
@@ -1720,7 +1802,7 @@ paths:
                         type: number
             example:
               idProveedor: "{{idProveedor}}"
-              fecha: 2026-09-25T21:41:59.996Z
+              fecha: 2026-11-01T23:40:19.479Z
               detalles:
                 - idProducto: "{{idProducto}}"
                   cantidad: 1

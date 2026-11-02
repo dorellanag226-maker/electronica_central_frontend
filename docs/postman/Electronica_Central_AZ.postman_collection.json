@@ -226,6 +226,60 @@
           "response": []
         },
         {
+          "name": "POST /api/auth/recuperar-contrasena",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/recuperar-contrasena",
+            "description": "Solicitar enlace de recuperación de contraseña",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"correo\": \"demo@example.test\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /api/auth/restablecer-contrasena",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/restablecer-contrasena",
+            "description": "Restablecer contraseña con el enlace recibido",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{resetToken}}\",\n  \"contrasenaNueva\": \"ClaveDePruebaSegura123\",\n  \"confirmacionContrasena\": \"ejemplo-confirmacionContrasena\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
           "name": "POST /api/auth/login (vendedor → vendedorToken)",
           "event": [
             {
@@ -1207,7 +1261,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"idProveedor\": \"{{idProveedor}}\",\n  \"fecha\": \"2026-09-25T21:42:00.030Z\",\n  \"detalles\": [\n    {\n      \"idProducto\": \"{{idProducto}}\",\n      \"cantidad\": 1,\n      \"costoUnitario\": 1\n    }\n  ]\n}",
+              "raw": "{\n  \"idProveedor\": \"{{idProveedor}}\",\n  \"fecha\": \"2026-11-01T23:40:19.518Z\",\n  \"detalles\": [\n    {\n      \"idProducto\": \"{{idProducto}}\",\n      \"cantidad\": 1,\n      \"costoUnitario\": 1\n    }\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1266,7 +1320,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"idProveedor\": \"{{idProveedor}}\",\n  \"fecha\": \"2026-09-25T21:42:00.031Z\",\n  \"detalles\": [\n    {\n      \"idProducto\": \"{{idProducto}}\",\n      \"cantidad\": 1,\n      \"costoUnitario\": 1\n    }\n  ]\n}",
+              "raw": "{\n  \"idProveedor\": \"{{idProveedor}}\",\n  \"fecha\": \"2026-11-01T23:40:19.518Z\",\n  \"detalles\": [\n    {\n      \"idProducto\": \"{{idProducto}}\",\n      \"cantidad\": 1,\n      \"costoUnitario\": 1\n    }\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"

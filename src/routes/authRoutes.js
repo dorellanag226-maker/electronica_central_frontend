@@ -5,11 +5,15 @@ import {
   loginAuthController,
   logoutAuthController,
   registerAuthController,
+  requestPasswordResetController,
+  resetPasswordController,
 } from '../controllers/authController.js';
 import {
   changePasswordAuthDto,
   loginAuthDto,
   registerAuthDto,
+  requestPasswordResetDto,
+  resetPasswordDto,
 } from '../dto/auth.dto.js';
 import { authenticate } from '../middlewares/authMiddleware.js';
 import { validateBody } from '../middlewares/validateDto.js';
@@ -25,6 +29,16 @@ authRouter.post(
   authenticate,
   validateBody(changePasswordAuthDto),
   changePasswordAuthController,
+);
+authRouter.post(
+  '/recuperar-contrasena',
+  validateBody(requestPasswordResetDto),
+  requestPasswordResetController,
+);
+authRouter.post(
+  '/restablecer-contrasena',
+  validateBody(resetPasswordDto),
+  resetPasswordController,
 );
 
 export default authRouter;

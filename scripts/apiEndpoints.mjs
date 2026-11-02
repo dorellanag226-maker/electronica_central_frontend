@@ -57,6 +57,28 @@ export const endpoints = [
       },
     },
   },
+  {
+    method: 'post', path: '/api/auth/recuperar-contrasena', operationId: 'authRequestPasswordReset', summary: 'Solicitar enlace de recuperación de contraseña', tags: ['Auth'], auth: false,
+    body: {
+      type: 'object',
+      required: ['correo'],
+      properties: {
+        correo: { type: 'string', format: 'email' },
+      },
+    },
+  },
+  {
+    method: 'post', path: '/api/auth/restablecer-contrasena', operationId: 'authResetPassword', summary: 'Restablecer contraseña con el enlace recibido', tags: ['Auth'], auth: false,
+    body: {
+      type: 'object',
+      required: ['token', 'contrasenaNueva', 'confirmacionContrasena'],
+      properties: {
+        token: { type: 'string', example: '{{resetToken}}' },
+        contrasenaNueva: { type: 'string', minLength: 8 },
+        confirmacionContrasena: { type: 'string', minLength: 8 },
+      },
+    },
+  },
 
   // Catalog público
   {

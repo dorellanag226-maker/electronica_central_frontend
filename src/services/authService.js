@@ -1,12 +1,18 @@
+import { env } from '../config/env.js';
 import { errorCodes } from '../config/errorCodes.js';
+import { logger } from '../lib/logger.js';
 import {
   createClientAccount,
   clearLoginFailures,
+  createPasswordResetToken,
   createSession,
+  findActiveUserByEmail,
   findSession,
   findUserById,
   findUserForLogin,
   registerFailedLogin,
+  resetPasswordWithToken,
+  revokeOtherSessions,
   revokeSession,
   setPasswordChangeRequired,
   touchSession,
@@ -16,10 +22,12 @@ import { addLog } from '../repositories/securityRepository.js';
 import { AppError } from '../utils/AppError.js';
 import { hashPassword, verifyPassword } from '../utils/password.js';
 import { createSessionToken, hashToken } from '../utils/token.js';
+import { sendPasswordResetMail } from './mailService.js';
 
 
 const MAX_LOGIN_ATTEMPTS = 3;
 const LOCKOUT_SECONDS = 3 * 60;
+const RESET_COOLDOWN_SECONDS = 60;
 
 // La bitacora es auxiliar: si falla el registro, el inicio de sesion no debe fallar.
 const logEvent = async (action, object, result, userId, ip) => {
@@ -136,6 +144,54 @@ export const changePasswordAuthService = async (session, data, ip) => {
 
   await updatePassword(user.id_usuario, await hashPassword(data.contrasenaNueva));
   await setPasswordChangeRequired(user.id_usuario, false);
+  await revokeOtherSessions(user.id_usuario, hashToken(session.token));
   await logEvent('CONTRASENA_CAMBIADA', user.nombre_usuario, 'OK', user.id_usuario, ip);
   return { changed: true };
+};
+
+// La respuesta es siempre la misma, exista o no el correo, para no revelar que cuentas existen.
+export const requestPasswordResetService = async ({ correo }, ip) => {
+  const user = await findActiveUserByEmail(correo);
+  if (!user) {
+    await logEvent('RECUPERACION_SOLICITADA', 'CORREO_NO_REGISTRADO', 'FALLIDO', null, ip);
+    return { solicitado: true };
+  }
+
+  const token = createSessionToken();
+  const created = await createPasswordResetToken(
+    user.id_usuario,
+    hashToken(token),
+    env.PASSWORD_RESET_TTL_MINUTES * 60,
+    RESET_COOLDOWN_SECONDS,
+  );
+  if (!created) {
+    await logEvent('RECUPERACION_SOLICITADA', user.nombre_usuario, 'LIMITADO', user.id_usuario, ip);
+    return { solicitado: true };
+  }
+
+  const enlace = `${env.PASSWORD_RESET_URL}?token=${encodeURIComponent(token)}`;
+  try {
+    await sendPasswordResetMail({
+      correo: user.correo,
+      nombreUsuario: user.nombre_usuario,
+      enlace,
+      minutos: env.PASSWORD_RESET_TTL_MINUTES,
+    });
+    await logEvent('RECUPERACION_SOLICITADA', user.nombre_usuario, 'OK', user.id_usuario, ip);
+  } catch (error) {
+    // Un fallo del SMTP no se expone al cliente (revelaria que el correo existe).
+    logger.error('mail.password_reset_failed', { idUsuario: user.id_usuario, message: error.message });
+    await logEvent('RECUPERACION_SOLICITADA', user.nombre_usuario, 'ERROR_CORREO', user.id_usuario, ip);
+  }
+  return { solicitado: true };
+};
+
+export const resetPasswordService = async ({ token, contrasenaNueva }, ip) => {
+  const user = await resetPasswordWithToken(hashToken(token), await hashPassword(contrasenaNueva));
+  if (!user) {
+    await logEvent('CONTRASENA_RESTABLECIDA', 'TOKEN_INVALIDO', 'FALLIDO', null, ip);
+    throw new AppError(errorCodes.BUSINESS_RULE, 422, { reason: 'RESET_TOKEN_INVALID' });
+  }
+  await logEvent('CONTRASENA_RESTABLECIDA', user.nombre_usuario, 'OK', user.id_usuario, ip);
+  return { restablecido: true };
 };
